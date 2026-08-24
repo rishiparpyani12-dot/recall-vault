@@ -82,6 +82,31 @@ public sealed class ApiWorkflowTests : IAsyncLifetime
 
         var getResponse = await Http.GetAsync($"/v1/memories/{remembered!.Id}?purpose=HTTP%20integration%20test");
         getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var secondRememberedResponse = await Http.PostAsJsonAsync("/v1/memories", new RememberRequest("I prefer a second integration tea", "Second preference", "preferences", Purpose: "HTTP integration test"));
+        secondRememberedResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var listPage = await Http.GetFromJsonAsync<Page<MemoryResult>>("/v1/memories?offset=0&limit=1&category=preferences&purpose=HTTP%20integration%20test", JsonOptions);
+        listPage.Should().NotBeNull();
+        listPage!.Items.Should().ContainSingle();
+        listPage.NextOffset.Should().NotBeNull();
+        var nextListPage = await Http.GetFromJsonAsync<Page<MemoryResult>>($"/v1/memories?offset={listPage.NextOffset}&limit=1&category=preferences&purpose=HTTP%20integration%20test", JsonOptions);
+        nextListPage.Should().NotBeNull();
+        nextListPage!.Items.Should().ContainSingle();
+        nextListPage.Items[0].Id.Should().NotBe(listPage.Items[0].Id);
+
+        var permissionsPage = await Http.GetFromJsonAsync<Page<PermissionResult>>("/v1/permissions?offset=0&limit=20&purpose=HTTP%20integration%20test", JsonOptions);
+        permissionsPage.Should().NotBeNull();
+        permissionsPage!.Items.Should().ContainSingle(x => x.Category == "preferences" && x.CanRead);
+
+        var historyPage = await Http.GetFromJsonAsync<Page<AuditEventResult>>($"/v1/access-history?offset=0&limit=1&memoryId={remembered.Id}&purpose=HTTP%20integration%20test", JsonOptions);
+        historyPage.Should().NotBeNull();
+        historyPage!.Items.Should().Contain(x => x.MemoryId == remembered.Id && x.WasAllowed);
+        historyPage.NextOffset.Should().NotBeNull();
+        var nextHistoryPage = await Http.GetFromJsonAsync<Page<AuditEventResult>>($"/v1/access-history?offset={historyPage.NextOffset}&limit=1&memoryId={remembered.Id}&purpose=HTTP%20integration%20test", JsonOptions);
+        nextHistoryPage.Should().NotBeNull();
+        nextHistoryPage!.Items.Should().ContainSingle();
+        nextHistoryPage.Items[0].Id.Should().NotBe(historyPage.Items[0].Id);
     }
 
     [Fact]

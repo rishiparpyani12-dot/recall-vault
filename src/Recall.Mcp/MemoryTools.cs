@@ -22,6 +22,15 @@ public sealed class MemoryTools(RecallApiClient api)
 
     [McpServerTool(Name = "memory_forget"), Description("Soft-delete a permitted memory so it is no longer retrievable or searchable.")]
     public async Task<ForgetResult> Forget(Guid id, string? purpose = null, CancellationToken cancellationToken = default) { await api.ForgetAsync(id, purpose, cancellationToken); return new(id, true); }
+
+    [McpServerTool(Name = "memory_list"), Description("List active, unexpired memories readable by this client. Use nextOffset to continue.")]
+    public Task<Page<MemoryResult>> List(int offset = 0, int limit = 20, string? category = null, string? purpose = null, CancellationToken cancellationToken = default) => api.ListAsync(offset, limit, category, purpose, cancellationToken);
+
+    [McpServerTool(Name = "memory_permissions"), Description("List this client's category permissions and sensitivity ceilings. Use nextOffset to continue.")]
+    public Task<Page<PermissionResult>> Permissions(int offset = 0, int limit = 20, string? purpose = null, CancellationToken cancellationToken = default) => api.PermissionsAsync(offset, limit, purpose, cancellationToken);
+
+    [McpServerTool(Name = "memory_access_history"), Description("List this client's immutable memory access audit records. Use nextOffset to continue.")]
+    public Task<Page<AuditEventResult>> AccessHistory(int offset = 0, int limit = 20, Guid? memoryId = null, string? purpose = null, CancellationToken cancellationToken = default) => api.AccessHistoryAsync(offset, limit, memoryId, purpose, cancellationToken);
 }
 
 public sealed record ForgetResult(Guid Id, bool Deleted);

@@ -69,6 +69,45 @@ public sealed class RecallService(IRecallStore store, IClock clock) : IRecallSer
         await store.SaveChangesAsync(ct);
     }
 
+    public async Task<Page<MemoryResult>> ListAsync(Caller caller, int offset, int limit, string? category, string? purpose, CancellationToken ct)
+    {
+        ValidatePage(offset, limit);
+        if (category is { Length: > 100 }) throw new ArgumentException("Category must be at most 100 characters.");
+        var scanLimit = Math.Min(limit * 5, 250);
+        var candidates = await store.ListMemoriesAsync(offset, scanLimit + 1, category, ct);
+        var results = new List<MemoryResult>(limit);
+        var consumed = 0;
+        foreach (var memory in candidates.Take(scanLimit))
+        {
+            consumed++;
+            var allowed = await IsAllowedAsync(caller, memory, p => p.CanRead, ct);
+            await AuditAsync(caller, memory.Id, AuditAction.List, purpose, allowed, allowed ? "allowed" : "permission_denied", ct);
+            if (allowed) results.Add(Map(memory));
+            if (results.Count == limit) break;
+        }
+        await store.SaveChangesAsync(ct);
+        int? nextOffset = candidates.Count > consumed ? offset + consumed : candidates.Count > scanLimit ? offset + scanLimit : null;
+        return new Page<MemoryResult>(results, offset, limit, nextOffset);
+    }
+
+    public async Task<Page<PermissionResult>> PermissionsAsync(Caller caller, int offset, int limit, string? purpose, CancellationToken ct)
+    {
+        ValidatePage(offset, limit);
+        var rows = await store.ListPermissionsAsync(caller.ClientId, offset, limit + 1, ct);
+        await AuditAsync(caller, null, AuditAction.Permissions, purpose, true, "allowed", ct);
+        await store.SaveChangesAsync(ct);
+        return new Page<PermissionResult>(rows.Take(limit).Select(x => new PermissionResult(x.Category, x.CanRead, x.CanCreate, x.CanUpdate, x.CanDelete, x.MaximumSensitivity)).ToArray(), offset, limit, rows.Count > limit ? offset + limit : null);
+    }
+
+    public async Task<Page<AuditEventResult>> AccessHistoryAsync(Caller caller, int offset, int limit, Guid? memoryId, string? purpose, CancellationToken ct)
+    {
+        ValidatePage(offset, limit);
+        var rows = await store.ListAuditEventsAsync(caller.ClientId, offset, limit + 1, memoryId, ct);
+        await AuditAsync(caller, null, AuditAction.AccessHistory, purpose, true, "allowed", ct);
+        await store.SaveChangesAsync(ct);
+        return new Page<AuditEventResult>(rows.Take(limit).Select(x => new AuditEventResult(x.Id, x.MemoryId, x.Action, x.Purpose, x.WasAllowed, x.Reason, x.Timestamp)).ToArray(), offset, limit, rows.Count > limit ? offset + limit : null);
+    }
+
     private async Task DemandAsync(Caller caller, string category, Sensitivity sensitivity, AuditAction action, string? purpose, Func<Permission, bool> operation, Guid? memoryId, CancellationToken ct)
     {
         var permission = await store.FindPermissionAsync(caller.ClientId, category, ct);
@@ -84,5 +123,6 @@ public sealed class RecallService(IRecallStore store, IClock clock) : IRecallSer
     private Task AuditAsync(Caller caller, Guid? memoryId, AuditAction action, string? purpose, bool allowed, string reason, CancellationToken ct) => store.AddAuditAsync(new AuditEvent { ClientId = caller.ClientId, MemoryId = memoryId, Action = action, Purpose = purpose?[..Math.Min(purpose.Length, 200)], WasAllowed = allowed, Reason = reason, Timestamp = clock.UtcNow }, ct);
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     private static void Validate(string content, string category, int importance, double confidence) { if (string.IsNullOrWhiteSpace(content) || content.Length > 20_000) throw new ArgumentException("Content must be 1-20,000 characters."); if (string.IsNullOrWhiteSpace(category) || category.Length > 100) throw new ArgumentException("Category must be 1-100 characters."); if (importance is < 0 or > 10) throw new ArgumentOutOfRangeException(nameof(importance)); if (confidence is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(confidence)); }
+    private static void ValidatePage(int offset, int limit) { if (offset < 0) throw new ArgumentOutOfRangeException(nameof(offset)); if (limit is < 1 or > 50) throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be between 1 and 50."); }
     private static MemoryResult Map(Memory m) => new(m.Id, m.Content, m.Summary, m.Category, m.Sensitivity, m.Importance, m.Confidence, m.SourceConversation, m.CreatedAt, m.UpdatedAt, m.ExpiresAt, m.Version);
 }

@@ -111,7 +111,18 @@ dotnet build RecallVault.slnx
 }
 ```
 
-Milestone 1 tools: `memory_remember`, `memory_search`, `memory_get`, `memory_update`, and `memory_forget`.
+MCP tools:
+
+- `memory_remember`
+- `memory_search`
+- `memory_get`
+- `memory_update`
+- `memory_forget`
+- `memory_list`
+- `memory_permissions`
+- `memory_access_history`
+
+List, permission, and access-history results use `offset`, a maximum `limit` of 50, and `nextOffset`. Pass `nextOffset` as the next request's `offset` until it is `null`.
 
 ## Test
 
@@ -119,7 +130,7 @@ Milestone 1 tools: `memory_remember`, `memory_search`, `memory_get`, `memory_upd
 dotnet test RecallVault.slnx
 ```
 
-The test suite verifies sensitivity-based access denial, filtering of unauthorized search results, removal of soft-deleted memories from FTS5 results, duplicate-registration conflicts, credential rejection, and the authenticated HTTP remember/search/get workflow.
+The test suite verifies sensitivity-based access denial, filtering of unauthorized search/list results, removal of soft-deleted memories from FTS5 results, duplicate-registration conflicts, credential rejection, and the authenticated HTTP remember/search/get/list/permissions/access-history workflow.
 
 ## Repository layout
 
@@ -137,7 +148,7 @@ Architecture, security tradeoffs, and planned work are in [ADR 0001](docs/adr-00
 
 - No encryption at rest or secure OS key storage yet.
 - No desktop UI, installer, browser extension, or cloud synchronization.
-- Five core MCP tools only; list, permission inspection, and access-history tools follow after the backend workflow is hardened.
+- Client administration, token rotation, and revocation tools are not implemented.
 - Registration is an operator API guarded by a bootstrap secret; token rotation/revocation endpoints and rate limiting are pending.
 - Audit rows are application-immutable, not cryptographically tamper-evident.
 - Permanent purge, vacuum, backup, and migration recovery policy are pending.

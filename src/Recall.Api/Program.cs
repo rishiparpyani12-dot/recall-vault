@@ -95,9 +95,12 @@ app.MapPost("/v1/clients", async (RegisterClientRequest request, HttpContext htt
 var memories = app.MapGroup("/v1/memories");
 memories.MapPost("/", async (RememberRequest request, HttpContext http, ClientAuthenticator auth, IRecallService service, CancellationToken ct) => Results.Ok(await service.RememberAsync(await auth.AuthenticateAsync(http, ct), request, ct)));
 memories.MapPost("/search", async (SearchRequest request, HttpContext http, ClientAuthenticator auth, IRecallService service, CancellationToken ct) => Results.Ok(await service.SearchAsync(await auth.AuthenticateAsync(http, ct), request, ct)));
+memories.MapGet("/", async (int offset, int limit, string? category, string? purpose, HttpContext http, ClientAuthenticator auth, IRecallService service, CancellationToken ct) => Results.Ok(await service.ListAsync(await auth.AuthenticateAsync(http, ct), offset, limit == 0 ? 20 : limit, category, purpose, ct)));
 memories.MapGet("/{id:guid}", async (Guid id, string? purpose, HttpContext http, ClientAuthenticator auth, IRecallService service, CancellationToken ct) => (await service.GetAsync(await auth.AuthenticateAsync(http, ct), id, purpose, ct)) is { } result ? Results.Ok(result) : Results.NotFound());
 memories.MapPut("/{id:guid}", async (Guid id, UpdateMemoryRequest request, HttpContext http, ClientAuthenticator auth, IRecallService service, CancellationToken ct) => Results.Ok(await service.UpdateAsync(await auth.AuthenticateAsync(http, ct), id, request, ct)));
 memories.MapDelete("/{id:guid}", async (Guid id, string? purpose, HttpContext http, ClientAuthenticator auth, IRecallService service, CancellationToken ct) => { await service.ForgetAsync(await auth.AuthenticateAsync(http, ct), id, purpose, ct); return Results.NoContent(); });
+app.MapGet("/v1/permissions", async (int offset, int limit, string? purpose, HttpContext http, ClientAuthenticator auth, IRecallService service, CancellationToken ct) => Results.Ok(await service.PermissionsAsync(await auth.AuthenticateAsync(http, ct), offset, limit == 0 ? 20 : limit, purpose, ct)));
+app.MapGet("/v1/access-history", async (int offset, int limit, Guid? memoryId, string? purpose, HttpContext http, ClientAuthenticator auth, IRecallService service, CancellationToken ct) => Results.Ok(await service.AccessHistoryAsync(await auth.AuthenticateAsync(http, ct), offset, limit == 0 ? 20 : limit, memoryId, purpose, ct)));
 
 app.UseExceptionHandler(handler => handler.Run(async context =>
 {

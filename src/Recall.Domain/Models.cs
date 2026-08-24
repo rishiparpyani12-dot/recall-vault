@@ -2,7 +2,7 @@ namespace Recall.Domain;
 
 public enum Sensitivity { Public, Normal, Personal, Sensitive, Restricted }
 public enum MemoryStatus { Active, Deleted }
-public enum AuditAction { Remember, Search, Get, Update, Forget }
+public enum AuditAction { Remember, Search, Get, Update, Forget, List, Permissions, AccessHistory }
 
 public sealed class Memory
 {
