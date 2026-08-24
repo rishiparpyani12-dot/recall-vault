@@ -11,3 +11,4 @@ target/
 .dotnet-cli/
 .nuget-packages/
 .smoke-data/
+.test-data/

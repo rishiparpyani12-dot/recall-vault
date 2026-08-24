@@ -3,5 +3,6 @@
     <ProjectReference Include="..\Recall.Infrastructure\Recall.Infrastructure.csproj" />
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
   </ItemGroup>
 </Project>
