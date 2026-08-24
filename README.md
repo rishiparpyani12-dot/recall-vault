@@ -130,7 +130,7 @@ List, permission, and access-history results use `offset`, a maximum `limit` of 
 dotnet test RecallVault.slnx
 ```
 
-The test suite verifies sensitivity-based access denial, filtering of unauthorized search/list results, removal of soft-deleted memories from FTS5 results, duplicate-registration conflicts, credential rejection, and the authenticated HTTP remember/search/get/list/permissions/access-history workflow.
+The test suite verifies sensitivity-based access denial, filtering of unauthorized search/list results, removal of soft-deleted memories from FTS5 results, duplicate-registration conflicts, credential rejection, and the authenticated HTTP workflow. It also launches the real API and MCP child processes, negotiates MCP over stdio with the official C# SDK, discovers all eight tools, exercises the memory lifecycle, and verifies rejected MCP credentials.
 
 ## Repository layout
 
@@ -139,7 +139,7 @@ The test suite verifies sensitivity-based access denial, filtering of unauthoriz
 - `src/Recall.Infrastructure`: EF Core persistence, migration, and Dapper/FTS5 search
 - `src/Recall.Api`: authenticated loopback HTTP API and Swagger UI
 - `src/Recall.Mcp`: official C# MCP SDK stdio adapter
-- `tests`: unit and SQLite integration tests
+- `tests`: unit, SQLite integration, and real-process MCP end-to-end tests
 - `docs`: architecture decision, implementation plan, and threat model
 
 Architecture, security tradeoffs, and planned work are in [ADR 0001](docs/adr-0001-milestone-1-architecture.md), the [threat model](docs/threat-model.md), and the [Milestone 1 plan](docs/milestone-1-plan.md).

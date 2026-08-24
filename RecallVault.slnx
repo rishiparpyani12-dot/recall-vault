@@ -8,6 +8,7 @@
     <Project Path="src/Recall.Worker/Recall.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Recall.E2E/Recall.E2E.csproj" />
     <Project Path="tests/Recall.IntegrationTests/Recall.IntegrationTests.csproj" />
     <Project Path="tests/Recall.UnitTests/Recall.UnitTests.csproj" />
   </Folder>
