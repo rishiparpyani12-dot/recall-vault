@@ -12,3 +12,4 @@ target/
 .nuget-packages/
 .smoke-data/
 .test-data/
+local-notes/
