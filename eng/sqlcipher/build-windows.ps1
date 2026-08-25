@@ -50,16 +50,16 @@ New-Item -ItemType Directory -Force -Path $ArtifactsDirectory, $outputDirectory 
 if (-not (Test-Path -LiteralPath (Join-Path $sourceDirectory '.git'))) {
     New-Item -ItemType Directory -Force -Path $sourceDirectory | Out-Null
     & git -C $sourceDirectory init --quiet
-    & git -C $sourceDirectory remote add origin $configuration.repository
+    & git -c "safe.directory=$sourceDirectory" -C $sourceDirectory remote add origin $configuration.repository
 }
 
-& git -C $sourceDirectory fetch --quiet --depth 1 origin "refs/tags/$($configuration.tag)"
+& git -c "safe.directory=$sourceDirectory" -C $sourceDirectory fetch --quiet --depth 1 origin "refs/tags/$($configuration.tag)"
 if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch the pinned SQLCipher tag.' }
-$resolvedCommit = (& git -C $sourceDirectory rev-parse FETCH_HEAD).Trim()
+$resolvedCommit = (& git -c "safe.directory=$sourceDirectory" -C $sourceDirectory rev-parse FETCH_HEAD).Trim()
 if ($resolvedCommit -ne $configuration.commit) {
     throw "SQLCipher source verification failed. Expected $($configuration.commit), received $resolvedCommit."
 }
-& git -C $sourceDirectory checkout --quiet --detach $resolvedCommit
+& git -c "safe.directory=$sourceDirectory" -C $sourceDirectory checkout --quiet --detach $resolvedCommit
 if ($LASTEXITCODE -ne 0) { throw 'Unable to check out the verified SQLCipher commit.' }
 
 & $VcpkgExecutable install `
