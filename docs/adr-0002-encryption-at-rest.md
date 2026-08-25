@@ -8,7 +8,7 @@
 
 Recall Vault currently stores data in ordinary SQLite. Milestone 1 deliberately does not claim encryption at rest, and valuable secrets must not be stored until encryption and key-handling tests are complete.
 
-The application uses `Microsoft.EntityFrameworkCore.Sqlite`, `Microsoft.Data.Sqlite`, Dapper, SQLite migrations, and FTS5. `Microsoft.Data.Sqlite` does not provide encryption itself; it can send a key to an encryption-capable native SQLite library. The previously convenient no-cost `SQLitePCLRaw.bundle_e_sqlcipher` distribution is deprecated as of SQLitePCLRaw 3.0. Current supported SQLCipher builds are distributed commercially by Zetetic, while using the open-source SQLCipher source requires Recall Vault to own the native build and update pipeline.
+The application uses `Microsoft.EntityFrameworkCore.Sqlite`, `Microsoft.Data.Sqlite`, Dapper, SQLite migrations, and FTS5. `Microsoft.Data.Sqlite` does not provide encryption itself; it can send a key to an encryption-capable native SQLite library. The previously convenient no-cost `SQLitePCLRaw.bundle_e_sqlcipher` distribution is deprecated as of SQLitePCLRaw 3.0. Zetetic distributes SQLCipher Community Edition under a BSD-style license, but does not provide official Community Edition .NET packages. A public Recall Vault release therefore needs to own a reproducible native build and update pipeline.
 
 Supporting every desktop OS in the first encryption release would also require independently designed and tested credential-vault backends and packaging paths. The current development and operator workflow is Windows and PowerShell based.
 
@@ -20,9 +20,9 @@ The first encrypted release will support **Windows only**. Cross-platform suppor
 
 ### SQLCipher distribution
 
-Recall Vault will use a **supported Zetetic SQLCipher native package compatible with SQLitePCLRaw and `Microsoft.Data.Sqlite`**. Before implementation begins, the maintainer must acquire the appropriate package/feed access and confirm redistribution rights for the intended Recall Vault distribution.
+Recall Vault will use **SQLCipher Community Edition built reproducibly from a pinned, verified upstream release** and loaded through SQLitePCLRaw by `Microsoft.Data.Sqlite`. Recall Vault will publish the native-build recipe, source revision, patches, checksums, software bill of materials, and required license notices with each binary release.
 
-We reject the deprecated `SQLitePCLRaw.bundle_e_sqlcipher` package. We also defer self-building SQLCipher because doing so would make Recall Vault responsible for reproducible native builds, platform hardening, CVE monitoring, and rapid SQLite/SQLCipher updates before the application packaging pipeline exists.
+We reject the deprecated `SQLitePCLRaw.bundle_e_sqlcipher` package and will not redistribute or imply support from Zetetic for a Recall Vault-built binary. Recall Vault accepts responsibility for native build reproducibility, platform hardening, upstream security monitoring, and timely SQLite/SQLCipher updates. Official Zetetic Commercial or Enterprise packages remain a possible future option for organizations that want vendor support, but they are not a prerequisite for the public project.
 
 The provider integration must:
 
@@ -30,6 +30,7 @@ The provider integration must:
 - supply the database key through `SqliteConnectionStringBuilder.Password`, never through checked-in configuration;
 - verify encryption support at startup instead of assuming that a password implies encryption;
 - preserve EF Core migrations, Dapper access, and FTS5;
+- verify the pinned upstream source and produced native artifact with cryptographic hashes;
 - fail closed if the provider, key, or encrypted database cannot be opened.
 
 ### Key protection
@@ -46,9 +47,10 @@ Missing credentials, a wrong key, an unavailable credential service, an unsuppor
 
 ## Consequences
 
-- Encryption implementation is blocked on supported SQLCipher package/feed access and redistribution review.
+- Encryption implementation is gated on a reproducible Windows native build and packaging pipeline.
 - The first secure package can be delivered and tested deeply on one OS.
 - Cross-platform clients can still speak HTTP or MCP to a Windows-hosted Recall Vault, but running the encrypted service itself on macOS or Linux is deferred.
+- Public binary distributions must reproduce the SQLCipher Community Edition copyright, license conditions, disclaimer, and applicable dependency notices in user-accessible materials.
 - The current security warning remains in force until provider integration, credential storage, migration behavior, and encryption-at-rest tests are complete.
 
 ## References
@@ -57,4 +59,5 @@ Missing credentials, a wrong key, an unavailable credential service, an unsuppor
 - [Microsoft.Data.Sqlite connection-string behavior](https://learn.microsoft.com/dotnet/standard/data/sqlite/connection-strings)
 - [SQLitePCLRaw 3.0 encryption distribution changes](https://github.com/ericsink/SQLitePCL.raw/blob/main/v3.md)
 - [SQLitePCLRaw encryption options](https://github.com/ericsink/SQLitePCL.raw/wiki/SQLite-encryption-options-for-use-with-SQLitePCLRaw)
-
+- [SQLCipher Community Edition and redistribution guidance](https://www.zetetic.net/sqlcipher/community/)
+- [SQLCipher license information](https://www.zetetic.net/sqlcipher/license/)

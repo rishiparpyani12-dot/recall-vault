@@ -8,4 +8,4 @@
 6. Prove permission denial and deleted-memory search behavior in tests. **Done**
 7. Add service/MCP end-to-end protocol tests, packaging, SQLCipher, secret-vault integration, audit/list/permission tools. **In progress**
 
-The encryption architecture decision is recorded in [ADR 0002](adr-0002-encryption-at-rest.md): Windows is the first supported host, keys will be held in Windows Credential Manager, and Recall Vault will use supported Zetetic SQLCipher builds after package/feed access and redistribution rights are confirmed. Encryption is not implemented yet, so the ordinary-SQLite security warning remains in force.
+The encryption architecture decision is recorded in [ADR 0002](adr-0002-encryption-at-rest.md): Windows is the first supported host, keys will be held in Windows Credential Manager, and public releases will use reproducible builds of SQLCipher Community Edition with checksums, an SBOM, and required notices. Encryption is not implemented yet, so the ordinary-SQLite security warning remains in force.
