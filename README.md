@@ -146,6 +146,8 @@ Architecture, security tradeoffs, and planned work are in [ADR 0001](docs/adr-00
 
 CI, dry-run packaging, and GitHub Release instructions are in the [release guide](docs/releases.md).
 
+The opt-in, test-data-only Streamable HTTP MCP host and container smoke-test instructions are in the [remote preview guide](docs/remote-preview.md). The existing local `stdio` adapter remains the default and supported path; the remote host fails at startup unless preview mode, credentials, allowed origins, and allowed hosts are explicitly configured.
+
 The first encryption-at-rest release is planned as Windows-only, using reproducible builds of SQLCipher Community Edition and Windows Credential Manager for the database key. Public binary releases will include build provenance, checksums, an SBOM, and required third-party notices. [ADR 0002](docs/adr-0002-encryption-at-rest.md) records the decision and its prerequisites. This is a plan, not a current security guarantee: the present database remains unencrypted.
 
 ## Current limitations

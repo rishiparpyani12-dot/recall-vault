@@ -1,0 +1,36 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/preview/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      Recall__Url: http://0.0.0.0:8080
+      Recall__DataDirectory: /data
+      Recall__BootstrapToken: ${RECALL_BOOTSTRAP_TOKEN:?required}
+    volumes:
+      - recall-preview-data:/data
+    expose:
+      - "8080"
+
+  mcp:
+    build:
+      context: ../..
+      dockerfile: deploy/preview/Dockerfile.mcp-http
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      RecallPreview__Enabled: "true"
+      RecallPreview__Token: ${RECALL_PREVIEW_TOKEN:?required}
+      RecallPreview__AllowedOrigins__0: ${RECALL_PREVIEW_ALLOWED_ORIGIN:?required}
+      RecallPreview__AllowedHosts__0: ${RECALL_PREVIEW_HOST:?required}
+      Recall__ApiUrl: http://api:8080
+      RECALL_CLIENT_ID: ${RECALL_CLIENT_ID:?required}
+      RECALL_CLIENT_TOKEN: ${RECALL_CLIENT_TOKEN:?required}
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  recall-preview-data:

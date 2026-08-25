@@ -5,6 +5,7 @@
     <Project Path="src/Recall.Domain/Recall.Domain.csproj" />
     <Project Path="src/Recall.Infrastructure/Recall.Infrastructure.csproj" />
     <Project Path="src/Recall.Mcp/Recall.Mcp.csproj" />
+    <Project Path="src/Recall.Mcp.Http/Recall.Mcp.Http.csproj" />
     <Project Path="src/Recall.Worker/Recall.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">

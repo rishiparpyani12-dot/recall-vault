@@ -1,0 +1,12 @@
+.git
+.github
+.dotnet-cli
+.dotnet-appdata
+artifacts
+bin
+obj
+dist
+data
+logs
+.env*
+!deploy/preview/.env.preview.example

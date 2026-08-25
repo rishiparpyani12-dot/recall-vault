@@ -9,6 +9,7 @@ recall-vault-v*-win-x64.zip*
 data/
 logs/
 .env
+.env.preview
 node_modules/
 target/
 .dotnet-cli/

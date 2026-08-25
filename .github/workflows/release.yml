@@ -61,6 +61,7 @@ jobs:
       - run: dotnet test RecallVault.slnx --no-build --configuration Release
       - run: dotnet restore src/Recall.Api/Recall.Api.csproj --runtime win-x64 --configfile NuGet.Config
       - run: dotnet restore src/Recall.Mcp/Recall.Mcp.csproj --runtime win-x64 --configfile NuGet.Config
+      - run: dotnet restore src/Recall.Mcp.Http/Recall.Mcp.Http.csproj --runtime win-x64 --configfile NuGet.Config
       - name: Build and verify SQLCipher
         shell: pwsh
         run: ./eng/sqlcipher/build-windows.ps1
@@ -70,6 +71,7 @@ jobs:
           $version = $env:RELEASE_VERSION.TrimStart('v')
           dotnet publish src/Recall.Api/Recall.Api.csproj --configuration Release --runtime win-x64 --self-contained $env:SELF_CONTAINED --no-restore -p:Version=$version --output dist/Recall.Api
           dotnet publish src/Recall.Mcp/Recall.Mcp.csproj --configuration Release --runtime win-x64 --self-contained $env:SELF_CONTAINED --no-restore -p:Version=$version --output dist/Recall.Mcp
+          dotnet publish src/Recall.Mcp.Http/Recall.Mcp.Http.csproj --configuration Release --runtime win-x64 --self-contained $env:SELF_CONTAINED --no-restore -p:Version=$version --output dist/Recall.Mcp.Http
           New-Item -ItemType Directory -Force dist/native | Out-Null
           Copy-Item artifacts/sqlcipher/win-x64/output/* dist/native -Recurse -Force
           Copy-Item README.md, LICENSE dist -Force
