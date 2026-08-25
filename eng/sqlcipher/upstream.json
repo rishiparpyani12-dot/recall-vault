@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/sqlcipher/sqlcipher.git",
+  "tag": "v4.17.0",
+  "commit": "f9788efa8ac4dfed75c03e4756b1666a1d0845da",
+  "edition": "community",
+  "license": "BSD-3-Clause",
+  "cryptoProvider": "OpenSSL",
+  "target": "win-x64"
+}
