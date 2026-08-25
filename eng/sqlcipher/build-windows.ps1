@@ -53,6 +53,18 @@ if (-not (Test-Path -LiteralPath $VcpkgExecutable)) {
     throw "vcpkg.exe was not found at '$VcpkgExecutable'."
 }
 
+$vcpkgRoot = Split-Path -Parent $VcpkgExecutable
+$vcpkgConfiguration = Get-Content -Raw (Join-Path $scriptDirectory 'vcpkg-configuration.json') | ConvertFrom-Json
+$vcpkgBaseline = $vcpkgConfiguration.'default-registry'.baseline
+if (Test-Path -LiteralPath (Join-Path $vcpkgRoot '.git')) {
+    & git -c "safe.directory=$vcpkgRoot" -C $vcpkgRoot cat-file -e "${vcpkgBaseline}:versions/baseline.json" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Fetching pinned vcpkg registry baseline $vcpkgBaseline..."
+        & git -c "safe.directory=$vcpkgRoot" -C $vcpkgRoot fetch --quiet --force --depth 1 origin $vcpkgBaseline
+        if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch the pinned vcpkg registry baseline.' }
+    }
+}
+
 New-Item -ItemType Directory -Force -Path $ArtifactsDirectory, $outputDirectory, $BuildDirectory | Out-Null
 
 if (-not (Test-Path -LiteralPath (Join-Path $sourceDirectory '.git'))) {
@@ -140,7 +152,6 @@ $opensslShare = Join-Path $opensslRoot 'share\openssl'
 Copy-Item -LiteralPath (Join-Path $opensslShare 'copyright') -Destination (Join-Path $licenseDirectory 'OpenSSL-copyright') -Force
 Copy-Item -LiteralPath (Join-Path $opensslShare 'vcpkg.spdx.json') -Destination (Join-Path $outputDirectory 'OpenSSL.spdx.json') -Force
 
-$vcpkgConfiguration = Get-Content -Raw (Join-Path $scriptDirectory 'vcpkg-configuration.json') | ConvertFrom-Json
 $provenance = [ordered]@{
     sqlcipher = [ordered]@{
         repository = $configuration.repository
