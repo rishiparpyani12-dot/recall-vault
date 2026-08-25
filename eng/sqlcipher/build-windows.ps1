@@ -100,7 +100,7 @@ $buildCommand = @(
     "call `"$vcvars`"",
     "cd /d `"$sourceDirectory`"",
     'nmake /f Makefile.msc clean',
-    "nmake /f Makefile.msc sqlite3.dll NO_TCL=1 `"OPTS=$compilerOptions`" `"LTLIBPATHS=$libraryPath`" `"LTLIBS=libcrypto.lib`""
+    "nmake /f Makefile.msc sqlite3.dll NO_TCL=1 `"OPTS=$compilerOptions`" `"LDOPTS=/Brepro`" `"LTLIBPATHS=$libraryPath`" `"LTLIBS=libcrypto.lib`""
 ) -join ' && '
 
 & cmd.exe /d /s /c $buildCommand
@@ -133,9 +133,75 @@ if ($LASTEXITCODE -ne 0) { throw 'The SQLCipher smoke test restore failed.' }
 & dotnet run --project $smokeTestProject --configuration Release --no-restore -- $outputDirectory
 if ($LASTEXITCODE -ne 0) { throw 'The packaged SQLCipher smoke test failed.' }
 
-$checksums = Get-ChildItem -LiteralPath $outputDirectory -File |
-    Sort-Object Name |
-    ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant(), $_.Name }
+$licenseDirectory = Join-Path $outputDirectory 'licenses'
+New-Item -ItemType Directory -Force -Path $licenseDirectory | Out-Null
+Copy-Item -LiteralPath (Join-Path $sourceDirectory 'LICENSE.md') -Destination (Join-Path $licenseDirectory 'SQLCipher-LICENSE.md') -Force
+$opensslShare = Join-Path $opensslRoot 'share\openssl'
+Copy-Item -LiteralPath (Join-Path $opensslShare 'copyright') -Destination (Join-Path $licenseDirectory 'OpenSSL-copyright') -Force
+Copy-Item -LiteralPath (Join-Path $opensslShare 'vcpkg.spdx.json') -Destination (Join-Path $outputDirectory 'OpenSSL.spdx.json') -Force
+
+$vcpkgConfiguration = Get-Content -Raw (Join-Path $scriptDirectory 'vcpkg-configuration.json') | ConvertFrom-Json
+$provenance = [ordered]@{
+    sqlcipher = [ordered]@{
+        repository = $configuration.repository
+        tag = $configuration.tag
+        commit = $resolvedCommit
+        edition = $configuration.edition
+    }
+    target = $configuration.target
+    cryptoProvider = $configuration.cryptoProvider
+    vcpkgBaseline = $vcpkgConfiguration.'default-registry'.baseline
+    openssl = [ordered]@{ version = '3.6.3'; triplet = 'x64-windows' }
+}
+$provenance | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $outputDirectory 'provenance.json')
+
+$sbom = [ordered]@{
+    spdxVersion = 'SPDX-2.3'
+    dataLicense = 'CC0-1.0'
+    SPDXID = 'SPDXRef-DOCUMENT'
+    name = "Recall-Vault-SQLCipher-$($configuration.tag)-win-$Architecture"
+    documentNamespace = "https://github.com/rishiparpyani12-dot/recall-vault/sbom/sqlcipher/$resolvedCommit/win-$Architecture"
+    creationInfo = [ordered]@{
+        created = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+        creators = @('Tool: Recall Vault eng/sqlcipher/build-windows.ps1')
+    }
+    packages = @(
+        [ordered]@{
+            name = 'SQLCipher Community Edition'
+            SPDXID = 'SPDXRef-Package-SQLCipher'
+            versionInfo = $configuration.tag.TrimStart('v')
+            downloadLocation = "$($configuration.repository)@$resolvedCommit"
+            filesAnalyzed = $false
+            licenseConcluded = 'BSD-3-Clause'
+            licenseDeclared = 'BSD-3-Clause'
+            copyrightText = 'Copyright (c) 2008-2026, ZETETIC, LLC'
+        },
+        [ordered]@{
+            name = 'OpenSSL'
+            SPDXID = 'SPDXRef-Package-OpenSSL'
+            versionInfo = '3.6.3'
+            downloadLocation = 'https://github.com/openssl/openssl'
+            filesAnalyzed = $false
+            licenseConcluded = 'Apache-2.0'
+            licenseDeclared = 'Apache-2.0'
+            copyrightText = 'NOASSERTION'
+        }
+    )
+    relationships = @(
+        [ordered]@{ spdxElementId = 'SPDXRef-DOCUMENT'; relationshipType = 'DESCRIBES'; relatedSpdxElement = 'SPDXRef-Package-SQLCipher' },
+        [ordered]@{ spdxElementId = 'SPDXRef-Package-SQLCipher'; relationshipType = 'DEPENDS_ON'; relatedSpdxElement = 'SPDXRef-Package-OpenSSL' }
+    )
+}
+$sbom | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 (Join-Path $outputDirectory 'SBOM.spdx.json')
+
+$outputPrefixLength = $outputDirectory.TrimEnd('\').Length + 1
+$checksums = Get-ChildItem -LiteralPath $outputDirectory -File -Recurse |
+    Where-Object Name -ne 'SHA256SUMS' |
+    Sort-Object FullName |
+    ForEach-Object {
+        $relativePath = $_.FullName.Substring($outputPrefixLength).Replace('\', '/')
+        "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant(), $relativePath
+    }
 $checksums | Set-Content -Encoding ascii (Join-Path $outputDirectory 'SHA256SUMS')
 
 Write-Host "Verified SQLCipher $($configuration.tag) ($resolvedCommit) and built win-$Architecture artifacts in $outputDirectory"
