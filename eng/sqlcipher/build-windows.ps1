@@ -122,6 +122,17 @@ $opensslRuntime = Get-ChildItem -LiteralPath (Join-Path $opensslRoot 'bin') -Fil
 if (-not $opensslRuntime) { throw 'The OpenSSL runtime DLL was not found.' }
 Copy-Item -LiteralPath $opensslRuntime.FullName -Destination $outputDirectory -Force
 
+$env:DOTNET_CLI_HOME = Join-Path $BuildDirectory 'dotnet-cli'
+$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
+$env:DOTNET_NOLOGO = '1'
+$env:APPDATA = Join-Path $BuildDirectory 'appdata'
+New-Item -ItemType Directory -Force -Path (Join-Path $env:APPDATA 'NuGet') | Out-Null
+$smokeTestProject = Join-Path $scriptDirectory 'SmokeTest\Recall.SqlCipherSmokeTest.csproj'
+& dotnet restore $smokeTestProject --configfile (Join-Path $repositoryRoot 'NuGet.Config')
+if ($LASTEXITCODE -ne 0) { throw 'The SQLCipher smoke test restore failed.' }
+& dotnet run --project $smokeTestProject --configuration Release --no-restore -- $outputDirectory
+if ($LASTEXITCODE -ne 0) { throw 'The packaged SQLCipher smoke test failed.' }
+
 $checksums = Get-ChildItem -LiteralPath $outputDirectory -File |
     Sort-Object Name |
     ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant(), $_.Name }
