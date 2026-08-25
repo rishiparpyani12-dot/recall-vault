@@ -84,13 +84,13 @@ $compilerOptions = @(
     '-DSQLITE_ENABLE_FTS5',
     "-I$opensslRoot\include"
 ) -join ' '
-$linkerOptions = "/LIBPATH:$opensslRoot\lib libcrypto.lib"
+$libraryPath = "/LIBPATH:$opensslRoot\lib"
 
 $buildCommand = @(
     "call `"$vcvars`"",
     "cd /d `"$sourceDirectory`"",
     'nmake /f Makefile.msc clean',
-    "nmake /f Makefile.msc sqlite3.dll NO_TCL=1 USE_CRT_DLL=1 DLL_FILE_NAME=sqlcipher.dll LIB_FILE_NAME=sqlcipher.lib `"OPTS=$compilerOptions`" `"CORE_LINK_OPTS=$linkerOptions`""
+    "nmake /f Makefile.msc sqlite3.dll NO_TCL=1 DLL_FILE_NAME=sqlcipher.dll LIB_FILE_NAME=sqlcipher.lib `"OPTS=$compilerOptions`" `"LTLIBPATHS=$libraryPath`" `"LTLIBS=libcrypto.lib`""
 ) -join ' && '
 
 & cmd.exe /d /s /c $buildCommand
