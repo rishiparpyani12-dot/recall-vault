@@ -74,6 +74,8 @@ $vcvars = Join-Path $visualStudio 'VC\Auxiliary\Build\vcvars64.bat'
 if (-not (Test-Path -LiteralPath $vcvars)) { throw 'vcvars64.bat was not found.' }
 
 $opensslRoot = Join-Path $installDirectory 'x64-windows'
+$opensslIncludeForBuild = '..\vcpkg_installed\x64-windows\include'
+$opensslLibraryForBuild = '..\vcpkg_installed\x64-windows\lib'
 $compilerOptions = @(
     '-DSQLITE_HAS_CODEC',
     '-DSQLCIPHER_CRYPTO_OPENSSL',
@@ -82,9 +84,9 @@ $compilerOptions = @(
     '-DSQLITE_THREADSAFE=1',
     '-DSQLITE_TEMP_STORE=2',
     '-DSQLITE_ENABLE_FTS5',
-    "-I$opensslRoot\include"
+    "-I$opensslIncludeForBuild"
 ) -join ' '
-$libraryPath = "/LIBPATH:$opensslRoot\lib"
+$libraryPath = "/LIBPATH:$opensslLibraryForBuild"
 
 $buildCommand = @(
     "call `"$vcvars`"",
