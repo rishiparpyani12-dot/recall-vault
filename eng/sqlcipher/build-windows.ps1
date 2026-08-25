@@ -3,6 +3,7 @@ param(
     [ValidateSet('x64')]
     [string] $Architecture = 'x64',
     [string] $ArtifactsDirectory,
+    [string] $BuildDirectory,
     [string] $VcpkgExecutable
 )
 
@@ -21,9 +22,16 @@ if (-not $ArtifactsDirectory) {
     $ArtifactsDirectory = Join-Path $repositoryRoot "artifacts\sqlcipher\win-$Architecture"
 }
 $ArtifactsDirectory = [IO.Path]::GetFullPath($ArtifactsDirectory)
-$sourceDirectory = Join-Path $ArtifactsDirectory 'src'
-$installDirectory = Join-Path $ArtifactsDirectory 'vcpkg_installed'
 $outputDirectory = Join-Path $ArtifactsDirectory 'output'
+if (-not $BuildDirectory) {
+    $BuildDirectory = Join-Path ([IO.Path]::GetTempPath()) "recall-vault-sqlcipher\win-$Architecture"
+}
+$BuildDirectory = [IO.Path]::GetFullPath($BuildDirectory)
+if ($BuildDirectory.Contains(' ')) {
+    throw "The SQLCipher Windows build directory cannot contain spaces: '$BuildDirectory'."
+}
+$sourceDirectory = Join-Path $BuildDirectory 'src'
+$installDirectory = Join-Path $BuildDirectory 'vcpkg_installed'
 
 if (-not $VcpkgExecutable) {
     $vcpkgCommand = Get-Command vcpkg.exe -ErrorAction SilentlyContinue
@@ -45,7 +53,7 @@ if (-not (Test-Path -LiteralPath $VcpkgExecutable)) {
     throw "vcpkg.exe was not found at '$VcpkgExecutable'."
 }
 
-New-Item -ItemType Directory -Force -Path $ArtifactsDirectory, $outputDirectory | Out-Null
+New-Item -ItemType Directory -Force -Path $ArtifactsDirectory, $outputDirectory, $BuildDirectory | Out-Null
 
 if (-not (Test-Path -LiteralPath (Join-Path $sourceDirectory '.git'))) {
     New-Item -ItemType Directory -Force -Path $sourceDirectory | Out-Null

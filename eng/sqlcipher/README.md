@@ -20,6 +20,6 @@ Run the Windows build from a PowerShell prompt:
 ./eng/sqlcipher/build-windows.ps1
 ```
 
-The script locates Visual Studio Build Tools and vcpkg, verifies the exact SQLCipher tag commit before checkout, restores pinned OpenSSL sources through vcpkg manifest mode, builds with MSVC, and writes the DLL, import library, headers, OpenSSL runtime, and `SHA256SUMS` to the ignored artifact directory.
+The script locates Visual Studio Build Tools and vcpkg, verifies the exact SQLCipher tag commit before checkout, restores pinned OpenSSL sources through vcpkg manifest mode, builds with MSVC, and writes the DLL, import library, headers, OpenSSL runtime, and `SHA256SUMS` to the ignored artifact directory. SQLCipher's Windows source-generation helpers cannot run from a path containing spaces, so compilation uses a validated temporary build directory and only finalized outputs are copied into the repository artifact tree.
 
 The provider smoke test and SBOM generation are not implemented yet. Until they are, Recall Vault continues to use ordinary SQLite and must not claim encryption at rest.
