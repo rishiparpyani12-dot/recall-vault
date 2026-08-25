@@ -144,6 +144,8 @@ The test suite verifies sensitivity-based access denial, filtering of unauthoriz
 
 Architecture, security tradeoffs, and planned work are in [ADR 0001](docs/adr-0001-milestone-1-architecture.md), the [threat model](docs/threat-model.md), and the [Milestone 1 plan](docs/milestone-1-plan.md).
 
+The first encryption-at-rest release is planned as Windows-only, using supported Zetetic SQLCipher builds and Windows Credential Manager for the database key. [ADR 0002](docs/adr-0002-encryption-at-rest.md) records the decision and its prerequisites. This is a plan, not a current security guarantee: the present database remains unencrypted.
+
 ## Current limitations
 
 - No encryption at rest or secure OS key storage yet.
