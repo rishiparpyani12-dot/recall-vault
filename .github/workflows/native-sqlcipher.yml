@@ -1,0 +1,40 @@
+name: Native SQLCipher
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - eng/sqlcipher/**
+      - .github/workflows/native-sqlcipher.yml
+  push:
+    branches: [main]
+    paths:
+      - eng/sqlcipher/**
+      - .github/workflows/native-sqlcipher.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-sqlcipher-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Build and verify SQLCipher
+        shell: pwsh
+        run: ./eng/sqlcipher/build-windows.ps1
+      - name: Upload verified native artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: recall-vault-sqlcipher-win-x64
+          path: artifacts/sqlcipher/win-x64/output/
+          if-no-files-found: error
+          retention-days: 14

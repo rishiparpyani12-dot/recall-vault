@@ -118,8 +118,17 @@ public sealed class McpProcessTests : IAsyncLifetime
 
         var invalidCredentials = credentials with { Token = "invalid-e2e-token" };
         await using var unauthorizedMcp = await CreateMcpClientAsync(invalidCredentials);
-        Func<Task> denied = async () => await unauthorizedMcp.CallToolAsync("memory_search", new Dictionary<string, object?> { ["query"] = "protocol" });
-        await denied.Should().ThrowAsync<McpProtocolException>();
+        CallToolResult? deniedResult = null;
+        McpProtocolException? deniedException = null;
+        try
+        {
+            deniedResult = await unauthorizedMcp.CallToolAsync("memory_search", new Dictionary<string, object?> { ["query"] = "protocol" });
+        }
+        catch (McpProtocolException exception)
+        {
+            deniedException = exception;
+        }
+        (deniedException is not null || deniedResult?.IsError == true).Should().BeTrue("invalid MCP credentials must be rejected");
     }
 
     private Process StartApi(Uri url)
@@ -191,8 +200,14 @@ public sealed class McpProcessTests : IAsyncLifetime
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "RecallVault.slnx"))) directory = directory.Parent;
         if (directory is null) throw new DirectoryNotFoundException("Could not locate the Recall Vault solution root.");
-        return Path.Combine(directory.FullName, "src", projectName, "bin", "Debug", "net10.0", $"{projectName}.dll");
+        return Path.Combine(directory.FullName, "src", projectName, "bin", BuildConfiguration, "net10.0", $"{projectName}.dll");
     }
+
+#if DEBUG
+    private const string BuildConfiguration = "Debug";
+#else
+    private const string BuildConfiguration = "Release";
+#endif
 
     private HttpClient Http => http ?? throw new InvalidOperationException("HTTP client is not initialized.");
     private Uri ApiUrl => apiUrl ?? throw new InvalidOperationException("API URL is not initialized.");

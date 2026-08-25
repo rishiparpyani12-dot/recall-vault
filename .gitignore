@@ -1,6 +1,8 @@
 bin/
 obj/
 artifacts/
+dist/
+recall-vault-v*-win-x64.zip*
 .vs/
 .idea/
 *.user
@@ -10,6 +12,7 @@ logs/
 node_modules/
 target/
 .dotnet-cli/
+.dotnet-appdata/
 .nuget-packages/
 .smoke-data/
 .test-data/

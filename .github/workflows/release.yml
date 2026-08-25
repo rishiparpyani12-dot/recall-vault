@@ -1,0 +1,115 @@
+name: Release
+run-name: ${{ inputs.version || github.ref_name }}${{ github.event_name == 'workflow_dispatch' && inputs.publish == false && ' (dry run)' || '' }}
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version beginning with v
+        required: true
+        default: v0.1.0-beta.1
+        type: string
+      prerelease:
+        description: Mark the GitHub Release as a prerelease
+        required: true
+        default: true
+        type: boolean
+      publish:
+        description: Create the GitHub Release; leave off for a dry run
+        required: true
+        default: false
+        type: boolean
+      self_contained:
+        description: Bundle the .NET runtime in the Windows package
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+      SHOULD_PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+      IS_PRERELEASE: ${{ github.event_name == 'push' && contains(github.ref_name, '-') || inputs.prerelease }}
+      SELF_CONTAINED: ${{ github.event_name == 'workflow_dispatch' && inputs.self_contained || false }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Validate version
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_VERSION -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
+            throw "Invalid release version: $env:RELEASE_VERSION"
+          }
+      - run: dotnet restore RecallVault.slnx --configfile NuGet.Config
+      - run: dotnet build RecallVault.slnx --no-restore --configuration Release
+      - run: dotnet test RecallVault.slnx --no-build --configuration Release
+      - run: dotnet restore src/Recall.Api/Recall.Api.csproj --runtime win-x64 --configfile NuGet.Config
+      - run: dotnet restore src/Recall.Mcp/Recall.Mcp.csproj --runtime win-x64 --configfile NuGet.Config
+      - name: Build and verify SQLCipher
+        shell: pwsh
+        run: ./eng/sqlcipher/build-windows.ps1
+      - name: Publish applications
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_VERSION.TrimStart('v')
+          dotnet publish src/Recall.Api/Recall.Api.csproj --configuration Release --runtime win-x64 --self-contained $env:SELF_CONTAINED --no-restore -p:Version=$version --output dist/Recall.Api
+          dotnet publish src/Recall.Mcp/Recall.Mcp.csproj --configuration Release --runtime win-x64 --self-contained $env:SELF_CONTAINED --no-restore -p:Version=$version --output dist/Recall.Mcp
+          New-Item -ItemType Directory -Force dist/native | Out-Null
+          Copy-Item artifacts/sqlcipher/win-x64/output/* dist/native -Recurse -Force
+          Copy-Item README.md, LICENSE dist -Force
+          Copy-Item docs dist/docs -Recurse -Force
+      - name: Create release archive
+        id: archive
+        shell: pwsh
+        run: |
+          $archive = "recall-vault-$env:RELEASE_VERSION-win-x64.zip"
+          Compress-Archive -Path dist/* -DestinationPath $archive -CompressionLevel Optimal
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          "$hash  $archive" | Set-Content -Encoding ascii "$archive.sha256"
+          "archive=$archive" >> $env:GITHUB_OUTPUT
+      - name: Upload dry-run or release artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: recall-vault-${{ env.RELEASE_VERSION }}-win-x64
+          path: |
+            ${{ steps.archive.outputs.archive }}
+            ${{ steps.archive.outputs.archive }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attest release archive
+        if: vars.ENABLE_ATTESTATIONS == 'true' && env.SHOULD_PUBLISH == 'true'
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.archive.outputs.archive }}
+      - name: Create GitHub Release
+        if: env.SHOULD_PUBLISH == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $arguments = @(
+            'release', 'create', $env:RELEASE_VERSION,
+            '${{ steps.archive.outputs.archive }}',
+            '${{ steps.archive.outputs.archive }}.sha256',
+            '--target', '${{ github.sha }}',
+            '--generate-notes',
+            '--title', "Recall Vault $env:RELEASE_VERSION"
+          )
+          if ($env:IS_PRERELEASE -eq 'true') { $arguments += '--prerelease' }
+          gh @arguments
