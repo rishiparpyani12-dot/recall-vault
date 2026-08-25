@@ -100,17 +100,22 @@ $buildCommand = @(
     "call `"$vcvars`"",
     "cd /d `"$sourceDirectory`"",
     'nmake /f Makefile.msc clean',
-    "nmake /f Makefile.msc sqlite3.dll NO_TCL=1 DLL_FILE_NAME=sqlcipher.dll LIB_FILE_NAME=sqlcipher.lib `"OPTS=$compilerOptions`" `"LTLIBPATHS=$libraryPath`" `"LTLIBS=libcrypto.lib`""
+    "nmake /f Makefile.msc sqlite3.dll NO_TCL=1 `"OPTS=$compilerOptions`" `"LTLIBPATHS=$libraryPath`" `"LTLIBS=libcrypto.lib`""
 ) -join ' && '
 
 & cmd.exe /d /s /c $buildCommand
 if ($LASTEXITCODE -ne 0) { throw 'The SQLCipher native build failed.' }
 
-$requiredFiles = @('sqlcipher.dll', 'sqlcipher.lib', 'sqlite3.h', 'sqlite3ext.h')
+$requiredFiles = @(
+    @{ Source = 'sqlite3.dll'; Destination = 'sqlcipher.dll' },
+    @{ Source = 'sqlite3.lib'; Destination = 'sqlcipher.lib' },
+    @{ Source = 'sqlite3.h'; Destination = 'sqlite3.h' },
+    @{ Source = 'sqlite3ext.h'; Destination = 'sqlite3ext.h' }
+)
 foreach ($file in $requiredFiles) {
-    $path = Join-Path $sourceDirectory $file
-    if (-not (Test-Path -LiteralPath $path)) { throw "Expected build output '$file' was not produced." }
-    Copy-Item -LiteralPath $path -Destination $outputDirectory -Force
+    $path = Join-Path $sourceDirectory $file.Source
+    if (-not (Test-Path -LiteralPath $path)) { throw "Expected build output '$($file.Source)' was not produced." }
+    Copy-Item -LiteralPath $path -Destination (Join-Path $outputDirectory $file.Destination) -Force
 }
 
 $opensslRuntime = Get-ChildItem -LiteralPath (Join-Path $opensslRoot 'bin') -Filter 'libcrypto-3-x64.dll' | Select-Object -First 1
