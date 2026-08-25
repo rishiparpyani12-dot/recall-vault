@@ -23,12 +23,20 @@ services:
     environment:
       ASPNETCORE_URLS: http://0.0.0.0:8080
       RecallPreview__Enabled: "true"
-      RecallPreview__Token: ${RECALL_PREVIEW_TOKEN:?required}
+      RecallPreview__AuthMode: ${RECALL_PREVIEW_AUTH_MODE:-StaticToken}
+      RecallPreview__Token: ${RECALL_PREVIEW_TOKEN:-}
       RecallPreview__AllowedOrigins__0: ${RECALL_PREVIEW_ALLOWED_ORIGIN:?required}
       RecallPreview__AllowedHosts__0: ${RECALL_PREVIEW_HOST:?required}
+      RecallPreview__PublicBaseUrl: ${RECALL_PREVIEW_PUBLIC_BASE_URL:-}
+      RecallPreview__OAuth__Authority: ${RECALL_PREVIEW_OAUTH_AUTHORITY:-}
+      RecallPreview__OAuth__Audience: ${RECALL_PREVIEW_OAUTH_AUDIENCE:-}
+      RecallPreview__OAuth__RequiredScope: ${RECALL_PREVIEW_OAUTH_REQUIRED_SCOPE:-}
+      RecallPreview__Tenants__0__Subject: ${RECALL_PREVIEW_TENANT_0_SUBJECT:-}
+      RecallPreview__Tenants__0__ClientId: ${RECALL_PREVIEW_TENANT_0_CLIENT_ID:-}
+      RecallPreview__Tenants__0__Token: ${RECALL_PREVIEW_TENANT_0_TOKEN:-}
       Recall__ApiUrl: http://api:8080
-      RECALL_CLIENT_ID: ${RECALL_CLIENT_ID:?required}
-      RECALL_CLIENT_TOKEN: ${RECALL_CLIENT_TOKEN:?required}
+      RECALL_CLIENT_ID: ${RECALL_CLIENT_ID:-}
+      RECALL_CLIENT_TOKEN: ${RECALL_CLIENT_TOKEN:-}
     ports:
       - "127.0.0.1:8080:8080"
 

@@ -5,24 +5,23 @@ using Recall.Application;
 
 namespace Recall.Mcp;
 
-public sealed class RecallApiClient(HttpClient http)
+public sealed class RecallApiClient(HttpClient http, IRecallCredentialProvider credentialProvider)
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
-    private void Authenticate()
+    private void Authenticate(HttpRequestMessage request)
     {
-        var id = Environment.GetEnvironmentVariable("RECALL_CLIENT_ID") ?? throw new InvalidOperationException("RECALL_CLIENT_ID is required.");
-        var token = Environment.GetEnvironmentVariable("RECALL_CLIENT_TOKEN") ?? throw new InvalidOperationException("RECALL_CLIENT_TOKEN is required.");
-        http.DefaultRequestHeaders.Remove("X-Recall-Client-Id");
-        http.DefaultRequestHeaders.Add("X-Recall-Client-Id", id);
-        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var credentials = credentialProvider.GetCredentials();
+        request.Headers.Add("X-Recall-Client-Id", credentials.ClientId.ToString());
+        request.Headers.Authorization = new("Bearer", credentials.Token);
     }
 
     public async Task<MemoryResult> RememberAsync(RememberRequest request, CancellationToken ct) => await SendAsync<MemoryResult>(HttpMethod.Post, "/v1/memories", request, ct);
     public async Task<IReadOnlyList<MemoryResult>> SearchAsync(SearchRequest request, CancellationToken ct) => await SendAsync<List<MemoryResult>>(HttpMethod.Post, "/v1/memories/search", request, ct);
     public async Task<MemoryResult?> GetAsync(Guid id, string? purpose, CancellationToken ct)
     {
-        Authenticate();
-        var response = await http.GetAsync($"/v1/memories/{id}?purpose={Uri.EscapeDataString(purpose ?? string.Empty)}", ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/v1/memories/{id}?purpose={Uri.EscapeDataString(purpose ?? string.Empty)}");
+        Authenticate(request);
+        using var response = await http.SendAsync(request, ct);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         await EnsureAsync(response, ct);
         return await response.Content.ReadFromJsonAsync<MemoryResult>(JsonOptions, ct);
@@ -33,22 +32,24 @@ public sealed class RecallApiClient(HttpClient http)
     public Task<Page<AuditEventResult>> AccessHistoryAsync(int offset, int limit, Guid? memoryId, string? purpose, CancellationToken ct) => GetAsync<Page<AuditEventResult>>($"/v1/access-history?offset={offset}&limit={limit}&memoryId={memoryId}&purpose={Escape(purpose)}", ct);
     public async Task ForgetAsync(Guid id, string? purpose, CancellationToken ct)
     {
-        Authenticate();
-        var response = await http.DeleteAsync($"/v1/memories/{id}?purpose={Uri.EscapeDataString(purpose ?? string.Empty)}", ct);
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"/v1/memories/{id}?purpose={Uri.EscapeDataString(purpose ?? string.Empty)}");
+        Authenticate(request);
+        using var response = await http.SendAsync(request, ct);
         await EnsureAsync(response, ct);
     }
     private async Task<T> SendAsync<T>(HttpMethod method, string uri, object value, CancellationToken ct)
     {
-        Authenticate();
         using var request = new HttpRequestMessage(method, uri) { Content = JsonContent.Create(value) };
+        Authenticate(request);
         using var response = await http.SendAsync(request, ct);
         await EnsureAsync(response, ct);
         return (await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct))!;
     }
     private async Task<T> GetAsync<T>(string uri, CancellationToken ct)
     {
-        Authenticate();
-        using var response = await http.GetAsync(uri, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        Authenticate(request);
+        using var response = await http.SendAsync(request, ct);
         await EnsureAsync(response, ct);
         return (await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct))!;
     }

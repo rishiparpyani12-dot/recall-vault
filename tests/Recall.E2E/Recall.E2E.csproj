@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Recall.Api\Recall.Api.csproj" />
     <ProjectReference Include="..\..\src\Recall.Mcp\Recall.Mcp.csproj" />
+    <ProjectReference Include="..\..\src\Recall.Mcp.Http\Recall.Mcp.Http.csproj" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
