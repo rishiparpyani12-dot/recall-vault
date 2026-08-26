@@ -1,49 +1,59 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Recall.Infrastructure;
 
-public sealed class WindowsCredentialDatabaseKeyProvider : IRecallDatabaseKeyProvider
+public sealed class WindowsCredentialStore : IRecallCredentialStore
 {
-    private const string TargetName = "RecallVault/DatabaseKey/v1";
-
-    public ValueTask<string> GetOrCreateKeyAsync(CancellationToken cancellationToken)
+    public bool TryRead(string targetName, out string secret)
     {
-        cancellationToken.ThrowIfCancellationRequested();
         if (!OperatingSystem.IsWindows())
             throw new PlatformNotSupportedException("Encrypted Recall Vault storage currently requires Windows Credential Manager.");
-
-        if (NativeMethods.CredRead(TargetName, 1, 0, out var credentialPointer))
+        if (!NativeMethods.CredRead(targetName, 1, 0, out var pointer))
         {
+            var error = Marshal.GetLastWin32Error();
+            if (error == 1168)
+            {
+                secret = string.Empty;
+                return false;
+            }
+            throw new Win32Exception(error, "Unable to read the Recall Vault database credential.");
+        }
+
+        try
+        {
+            var credential = Marshal.PtrToStructure<NativeCredential>(pointer);
+            var bytes = new byte[credential.CredentialBlobSize];
             try
             {
-                var credential = Marshal.PtrToStructure<NativeCredential>(credentialPointer);
-                var bytes = new byte[credential.CredentialBlobSize];
                 Marshal.Copy(credential.CredentialBlob, bytes, 0, bytes.Length);
-                var key = Encoding.UTF8.GetString(bytes);
-                if (!IsValidKey(key)) throw new InvalidOperationException("The Recall Vault database credential is malformed.");
-                return ValueTask.FromResult(key);
+                secret = Encoding.UTF8.GetString(bytes);
+                return true;
             }
             finally
             {
-                NativeMethods.CredFree(credentialPointer);
+                System.Security.Cryptography.CryptographicOperations.ZeroMemory(bytes);
             }
         }
+        finally
+        {
+            NativeMethods.CredFree(pointer);
+        }
+    }
 
-        var error = Marshal.GetLastWin32Error();
-        if (error != 1168) throw new Win32Exception(error, "Unable to read the Recall Vault database credential.");
-
-        var generated = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        var blob = Encoding.UTF8.GetBytes(generated);
+    public void Write(string targetName, string secret)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Encrypted Recall Vault storage currently requires Windows Credential Manager.");
+        var blob = Encoding.UTF8.GetBytes(secret);
         var handle = GCHandle.Alloc(blob, GCHandleType.Pinned);
         try
         {
             var credential = new NativeCredential
             {
                 Type = 1,
-                TargetName = TargetName,
+                TargetName = targetName,
                 CredentialBlobSize = (uint)blob.Length,
                 CredentialBlob = handle.AddrOfPinnedObject(),
                 Persist = 2,
@@ -54,15 +64,10 @@ public sealed class WindowsCredentialDatabaseKeyProvider : IRecallDatabaseKeyPro
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(blob);
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(blob);
             handle.Free();
         }
-
-        return ValueTask.FromResult(generated);
     }
-
-    private static bool IsValidKey(string key) =>
-        key.Length == 64 && key.All(character => char.IsAsciiHexDigit(character));
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct NativeCredential

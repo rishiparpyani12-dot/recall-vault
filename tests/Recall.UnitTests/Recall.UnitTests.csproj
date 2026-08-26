@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\..\src\Recall.Application\Recall.Application.csproj" /><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" /><PackageReference Include="FluentAssertions" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\..\src\Recall.Application\Recall.Application.csproj" /><ProjectReference Include="..\..\src\Recall.Infrastructure\Recall.Infrastructure.csproj" /><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" /><PackageReference Include="FluentAssertions" /></ItemGroup>
 </Project>

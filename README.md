@@ -28,7 +28,7 @@ $env:RECALL_BOOTSTRAP_TOKEN = '<choose-a-long-random-bootstrap-token>'
 dotnet run --project src/Recall.Api
 ```
 
-The API refuses to start without the verified SQLCipher provider. On first run it creates a random database key in Windows Credential Manager under `RecallVault/DatabaseKey/v1`. The key is never accepted from application configuration or environment variables. Existing plaintext `recall.db` files are not migrated automatically; retain them as backups and wait for the explicit MEM-9 migration tooling.
+The API refuses to start without the verified SQLCipher provider. On first run it creates a random database key in Windows Credential Manager under `RecallVault/DatabaseKey/v1`. The key is never accepted from application configuration or environment variables. If a database already exists and that credential is missing or malformed, startup fails without generating or storing a replacement key. Existing plaintext `recall.db` files are not migrated automatically; retain them as backups and wait for the explicit MEM-9 migration tooling.
 
 Register a client from a second shell. Save the returned token: it is shown only once.
 
@@ -136,7 +136,7 @@ List, permission, and access-history results use `offset`, a maximum `limit` of 
 dotnet test RecallVault.slnx
 ```
 
-The test suite verifies encrypted creation and restart, a non-plaintext database header, absence of a known memory marker in database bytes, rejection of unkeyed reads, FTS5 behavior, sensitivity-based access denial, authorization filtering, duplicate-registration conflicts, credential rejection, and the authenticated HTTP workflow. It also hosts the real API on Kestrel, launches the MCP child process, and exercises all eight MCP tools.
+The test suite verifies encrypted creation and restart, protected-key creation and reuse, missing/malformed credential failures, credential-store write failures, a non-plaintext database header, absence of a known memory marker in database bytes, rejection of unkeyed reads, FTS5 behavior, authorization, and the authenticated HTTP/MCP workflows.
 
 ## Repository layout
 
