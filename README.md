@@ -2,12 +2,14 @@
 
 Recall Vault is a local-first, user-controlled memory service for multiple AI clients. It provides one permissioned memory vault for applications such as Codex, Claude Desktop, Cursor, ChatGPT, Claude, and Gemini. This repository currently contains the Milestone 1 backend, local HTTP API, and stdio MCP adapter.
 
-> Security status: the current database is ordinary SQLite and is **not encrypted at rest**. SQLCipher integration and OS credential-vault storage remain required before handling valuable secrets.
+> Security status: new Windows vaults use the pinned SQLCipher Community Edition build and a random 256-bit key stored in Windows Credential Manager. Plaintext-database migration, key-loss recovery, and the complete fail-closed test matrix remain unfinished, so do not store valuable secrets yet.
 
 ## Prerequisites
 
+- Windows x64
 - .NET SDK 10
-- PowerShell examples below; equivalent environment variables work on macOS/Linux
+- Visual Studio C++ Build Tools with vcpkg
+- PowerShell
 
 No manual database setup is needed. The service migrates a database in `%LOCALAPPDATA%\RecallVault` on first run.
 
@@ -21,9 +23,12 @@ When the service is running:
 
 ```powershell
 cd recall-vault
+./eng/sqlcipher/build-windows.ps1
 $env:RECALL_BOOTSTRAP_TOKEN = '<choose-a-long-random-bootstrap-token>'
 dotnet run --project src/Recall.Api
 ```
+
+The API refuses to start without the verified SQLCipher provider. On first run it creates a random database key in Windows Credential Manager under `RecallVault/DatabaseKey/v1`. The key is never accepted from application configuration or environment variables. Existing plaintext `recall.db` files are not migrated automatically; retain them as backups and wait for the explicit MEM-9 migration tooling.
 
 Register a client from a second shell. Save the returned token: it is shown only once.
 
@@ -127,10 +132,11 @@ List, permission, and access-history results use `offset`, a maximum `limit` of 
 ## Test
 
 ```powershell
+./eng/sqlcipher/build-windows.ps1
 dotnet test RecallVault.slnx
 ```
 
-The test suite verifies sensitivity-based access denial, filtering of unauthorized search/list results, removal of soft-deleted memories from FTS5 results, duplicate-registration conflicts, credential rejection, and the authenticated HTTP workflow. It also launches the real API and MCP child processes, negotiates MCP over stdio with the official C# SDK, discovers all eight tools, exercises the memory lifecycle, and verifies rejected MCP credentials.
+The test suite verifies encrypted creation and restart, a non-plaintext database header, absence of a known memory marker in database bytes, rejection of unkeyed reads, FTS5 behavior, sensitivity-based access denial, authorization filtering, duplicate-registration conflicts, credential rejection, and the authenticated HTTP workflow. It also hosts the real API on Kestrel, launches the MCP child process, and exercises all eight MCP tools.
 
 ## Repository layout
 
@@ -146,13 +152,15 @@ Architecture, security tradeoffs, and planned work are in [ADR 0001](docs/adr-00
 
 CI, dry-run packaging, and GitHub Release instructions are in the [release guide](docs/releases.md).
 
-The opt-in, test-data-only Streamable HTTP MCP host and container smoke-test instructions are in the [remote preview guide](docs/remote-preview.md). The existing local `stdio` adapter remains the default and supported path; the remote host fails at startup unless preview mode, credentials, allowed origins, and allowed hosts are explicitly configured.
+The opt-in Streamable HTTP MCP host is documented in the [remote preview guide](docs/remote-preview.md). The existing Linux container preview is paused because the encrypted API runtime is Windows-only; do not deploy it with a plaintext fallback.
 
-The first encryption-at-rest release is planned as Windows-only, using reproducible builds of SQLCipher Community Edition and Windows Credential Manager for the database key. Public binary releases will include build provenance, checksums, an SBOM, and required third-party notices. [ADR 0002](docs/adr-0002-encryption-at-rest.md) records the decision and its prerequisites. This is a plan, not a current security guarantee: the present database remains unencrypted.
+The first encryption-at-rest runtime is Windows-only. It uses reproducible builds of SQLCipher Community Edition and Windows Credential Manager for the database key. Public binary releases include build provenance, checksums, an SBOM, and required third-party notices. [ADR 0002](docs/adr-0002-encryption-at-rest.md) records the decision and remaining recovery prerequisites.
 
 ## Current limitations
 
-- No encryption at rest or secure OS key storage yet.
+- Existing plaintext databases cannot yet be migrated; startup fails instead of silently converting or replacing them.
+- Lost-key recovery, key rotation, backup/restore, and the complete wrong/missing-key test matrix are pending.
+- The encrypted API runtime currently supports Windows x64 only; the Linux container preview cannot host it.
 - No desktop UI, installer, browser extension, or cloud synchronization.
 - Client administration, token rotation, and revocation tools are not implemented.
 - Registration is an operator API guarded by a bootstrap secret; token rotation/revocation endpoints and rate limiting are pending.

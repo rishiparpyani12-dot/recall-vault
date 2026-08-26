@@ -30,4 +30,4 @@ To enable GitHub artifact attestations, create the repository Actions variable `
 
 ## Current release status
 
-Release archives are previews until MEM-7 through MEM-10 are complete. The packaged native SQLCipher library is encrypted and verified, but the Recall API still uses ordinary SQLite. Do not describe a preview archive as providing application-level encryption at rest.
+Release archives remain previews until plaintext migration, recovery behavior, and the complete key-failure suite are finished. New Windows vaults use the packaged SQLCipher runtime and a Windows Credential Manager key, but this is not yet a security-complete public release.

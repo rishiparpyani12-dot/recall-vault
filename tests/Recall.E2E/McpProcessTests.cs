@@ -4,13 +4,18 @@ using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using Recall.Api;
 using Recall.Application;
 using Recall.Domain;
+using Recall.Infrastructure;
 using Xunit;
 
 namespace Recall.E2E;
@@ -19,7 +24,7 @@ public sealed class McpProcessTests : IAsyncLifetime
 {
     private const string BootstrapToken = "e2e-bootstrap-token";
     private readonly string dataDirectory = Path.Combine(Path.GetTempPath(), "recall-vault-e2e", Guid.NewGuid().ToString("N"));
-    private Process? apiProcess;
+    private WebApplicationFactory<ApiAssemblyMarker>? apiFactory;
     private HttpClient? http;
     private Uri? apiUrl;
 
@@ -27,37 +32,28 @@ public sealed class McpProcessTests : IAsyncLifetime
     {
         Directory.CreateDirectory(dataDirectory);
         apiUrl = new Uri($"http://127.0.0.1:{GetFreePort()}");
-        apiProcess = StartApi(apiUrl);
-        http = new HttpClient { BaseAddress = apiUrl, Timeout = TimeSpan.FromSeconds(5) };
-
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        while (!timeout.IsCancellationRequested)
+        apiFactory = new WebApplicationFactory<ApiAssemblyMarker>().WithWebHostBuilder(builder => builder
+            .UseSetting("Recall:DataDirectory", dataDirectory)
+            .UseSetting("Recall:BootstrapToken", BootstrapToken)
+            .UseSetting("Recall:Url", apiUrl.ToString().TrimEnd('/'))
+            .ConfigureServices(services =>
+            {
+                services.RemoveAll<IRecallDatabaseKeyProvider>();
+                services.AddSingleton<IRecallDatabaseKeyProvider>(new TestDatabaseKeyProvider());
+            }));
+        apiFactory.UseKestrel(apiUrl.Port);
+        http = apiFactory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = apiUrl });
+        using var response = await http.GetAsync("/health");
+        if (response.StatusCode != HttpStatusCode.OK)
         {
-            if (apiProcess.HasExited)
-            {
-                var error = await apiProcess.StandardError.ReadToEndAsync(timeout.Token);
-                throw new InvalidOperationException($"Recall API exited with code {apiProcess.ExitCode}: {error}");
-            }
-            try
-            {
-                using var response = await http.GetAsync("/health", timeout.Token);
-                if (response.StatusCode == HttpStatusCode.OK) return;
-            }
-            catch (HttpRequestException) { }
-            await Task.Delay(100, timeout.Token);
+            throw new InvalidOperationException($"Recall API health check failed with {response.StatusCode}.");
         }
-        throw new TimeoutException("Recall API did not become healthy.");
     }
 
     public async Task DisposeAsync()
     {
         http?.Dispose();
-        if (apiProcess is { HasExited: false })
-        {
-            apiProcess.Kill(entireProcessTree: true);
-            await apiProcess.WaitForExitAsync();
-        }
-        apiProcess?.Dispose();
+        if (apiFactory is not null) await apiFactory.DisposeAsync();
         SqliteConnection.ClearAllPools();
 
         var resolved = Path.GetFullPath(dataDirectory);
@@ -131,22 +127,6 @@ public sealed class McpProcessTests : IAsyncLifetime
         (deniedException is not null || deniedResult?.IsError == true).Should().BeTrue("invalid MCP credentials must be rejected");
     }
 
-    private Process StartApi(Uri url)
-    {
-        var start = new ProcessStartInfo("dotnet")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        start.ArgumentList.Add(GetProjectAssembly("Recall.Api"));
-        start.Environment["Recall__DataDirectory"] = dataDirectory;
-        start.Environment["Recall__Url"] = url.ToString().TrimEnd('/');
-        start.Environment["Recall__BootstrapToken"] = BootstrapToken;
-        return Process.Start(start) ?? throw new InvalidOperationException("Could not start Recall API.");
-    }
-
     private async Task<RegisterClientResponse> RegisterAsync(string identifier, Sensitivity maximumSensitivity)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/clients")
@@ -211,4 +191,10 @@ public sealed class McpProcessTests : IAsyncLifetime
 
     private HttpClient Http => http ?? throw new InvalidOperationException("HTTP client is not initialized.");
     private Uri ApiUrl => apiUrl ?? throw new InvalidOperationException("API URL is not initialized.");
+
+    private sealed class TestDatabaseKeyProvider : IRecallDatabaseKeyProvider
+    {
+        private const string Key = "60EBD7696A88A5B901457DA01799D6CDA4C1B632215F1462A621BC42DA64C571";
+        public ValueTask<string> GetOrCreateKeyAsync(CancellationToken cancellationToken) => ValueTask.FromResult(Key);
+    }
 }

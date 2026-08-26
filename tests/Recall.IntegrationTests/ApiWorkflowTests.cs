@@ -1,15 +1,19 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Recall.Api;
 using Recall.Application;
 using Recall.Domain;
+using Recall.Infrastructure;
 using Xunit;
 
 namespace Recall.IntegrationTests;
@@ -25,10 +29,7 @@ public sealed class ApiWorkflowTests : IAsyncLifetime
     public Task InitializeAsync()
     {
         Directory.CreateDirectory(dataDirectory);
-        factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
-            .UseSetting("Recall:DataDirectory", dataDirectory)
-            .UseSetting("Recall:BootstrapToken", BootstrapToken)
-            .UseSetting("Recall:Url", "http://127.0.0.1:0"));
+        factory = CreateFactory();
         http = factory.CreateClient();
         return Task.CompletedTask;
     }
@@ -121,7 +122,54 @@ public sealed class ApiWorkflowTests : IAsyncLifetime
         invalid.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task Database_is_encrypted_restarts_and_rejects_unkeyed_reads()
+    {
+        var marker = "encryption-marker-that-must-not-appear-in-file";
+        var registrationResponse = await RegisterAsync(NewRegistration("encryption-client"));
+        var credentials = await registrationResponse.Content.ReadFromJsonAsync<RegisterClientResponse>(JsonOptions);
+        Authenticate(credentials!);
+        (await Http.PostAsJsonAsync("/v1/memories", new RememberRequest(marker, null, "preferences"))).EnsureSuccessStatusCode();
+
+        http!.Dispose();
+        http = null;
+        await factory!.DisposeAsync();
+        factory = null;
+        SqliteConnection.ClearAllPools();
+
+        factory = CreateFactory();
+        http = factory.CreateClient();
+        (await Http.GetAsync("/health")).EnsureSuccessStatusCode();
+
+        http.Dispose();
+        http = null;
+        await factory.DisposeAsync();
+        factory = null;
+        SqliteConnection.ClearAllPools();
+
+        var databasePath = Path.Combine(dataDirectory, "recall.db");
+        var bytes = await File.ReadAllBytesAsync(databasePath);
+        bytes.AsSpan(0, 16).SequenceEqual("SQLite format 3\0"u8).Should().BeFalse();
+        bytes.AsSpan().IndexOf(Encoding.UTF8.GetBytes(marker)).Should().Be(-1);
+
+        await using var unkeyed = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly");
+        await unkeyed.OpenAsync();
+        var command = unkeyed.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master";
+        var read = async () => await command.ExecuteScalarAsync();
+        await read.Should().ThrowAsync<SqliteException>();
+    }
+
     private HttpClient Http => http ?? throw new InvalidOperationException("Test client has not been initialized.");
+    private WebApplicationFactory<Program> CreateFactory() => new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+        .UseSetting("Recall:DataDirectory", dataDirectory)
+        .UseSetting("Recall:BootstrapToken", BootstrapToken)
+        .UseSetting("Recall:Url", "http://127.0.0.1:0")
+        .ConfigureServices(services =>
+        {
+            services.RemoveAll<IRecallDatabaseKeyProvider>();
+            services.AddSingleton<IRecallDatabaseKeyProvider>(new TestDatabaseKeyProvider());
+        }));
     private async Task<HttpResponseMessage> RegisterAsync(RegisterClientRequest request)
     {
         using var message = new HttpRequestMessage(HttpMethod.Post, "/v1/clients") { Content = JsonContent.Create(request) };
@@ -140,5 +188,11 @@ public sealed class ApiWorkflowTests : IAsyncLifetime
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
+    }
+
+    private sealed class TestDatabaseKeyProvider : IRecallDatabaseKeyProvider
+    {
+        private const string Key = "B4C28A91E9CF69FB55BBD8A48973920B35F020290E0B7D9B8228EAA26DF85903";
+        public ValueTask<string> GetOrCreateKeyAsync(CancellationToken cancellationToken) => ValueTask.FromResult(Key);
     }
 }

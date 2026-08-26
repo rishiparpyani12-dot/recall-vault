@@ -13,6 +13,7 @@ public sealed class FtsSearchTests
     [Fact]
     public async Task Soft_deleted_memory_is_removed_from_fts_results()
     {
+        SqlCipherConnectionFactory.InitializeProvider();
         var ct = CancellationToken.None;
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync(ct);

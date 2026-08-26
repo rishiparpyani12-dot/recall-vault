@@ -2,7 +2,7 @@
 
 Recall Vault includes an opt-in Streamable HTTP MCP host for private testing. It is disabled by default, validates `Host` and `Origin`, limits MCP request bodies to 1 MiB, and allows 60 requests per minute. It supports a static token for local smoke tests and OIDC/JWT bearer validation for hosted connectors.
 
-This preview is not production-ready. Use synthetic data only. The API database remains ordinary SQLite until MEM-7 through MEM-10 are complete. Never expose `StaticToken` mode publicly merely to make a client connect.
+This preview is not production-ready. Use synthetic data only. The encrypted API runtime now requires Windows x64, so the existing Linux Compose deployment is paused and must not be made functional by restoring ordinary SQLite. A hosted preview needs a Windows container/VM path or a future reviewed cross-platform key backend. Never expose `StaticToken` mode publicly merely to make a client connect.
 
 ## Configuration
 

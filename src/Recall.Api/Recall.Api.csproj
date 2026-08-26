@@ -5,4 +5,8 @@
     <PackageReference Include="Serilog.Sinks.File" />
     <PackageReference Include="Swashbuckle.AspNetCore" />
   </ItemGroup>
+  <ItemGroup Condition="Exists('..\..\artifacts\sqlcipher\win-x64\output\sqlcipher.dll')">
+    <Content Include="..\..\artifacts\sqlcipher\win-x64\output\sqlcipher.dll" Link="sqlcipher.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\artifacts\sqlcipher\win-x64\output\libcrypto-3-x64.dll" Link="libcrypto-3-x64.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

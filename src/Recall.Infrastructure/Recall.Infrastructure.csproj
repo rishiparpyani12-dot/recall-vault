@@ -2,7 +2,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Recall.Application\Recall.Application.csproj" />
     <PackageReference Include="Dapper" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design"><PrivateAssets>all</PrivateAssets></PackageReference>
+    <PackageReference Include="SQLitePCLRaw.provider.sqlcipher" />
   </ItemGroup>
 </Project>
