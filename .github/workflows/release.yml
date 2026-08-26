@@ -24,7 +24,7 @@ on:
       self_contained:
         description: Bundle the .NET runtime in the Windows package
         required: true
-        default: false
+        default: true
         type: boolean
 
 permissions:
@@ -44,7 +44,7 @@ jobs:
       RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
       SHOULD_PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
       IS_PRERELEASE: ${{ github.event_name == 'push' && contains(github.ref_name, '-') || inputs.prerelease }}
-      SELF_CONTAINED: ${{ github.event_name == 'workflow_dispatch' && inputs.self_contained || false }}
+      SELF_CONTAINED: ${{ github.event_name == 'push' || inputs.self_contained }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-dotnet@v6
@@ -76,6 +76,9 @@ jobs:
           Copy-Item artifacts/sqlcipher/win-x64/output/* dist/native -Recurse -Force
           Copy-Item README.md, LICENSE dist -Force
           Copy-Item docs dist/docs -Recurse -Force
+          New-Item -ItemType Directory -Force dist/deploy | Out-Null
+          Copy-Item deploy/preview/windows/start-packaged-preview.ps1 dist/deploy/start-packaged-preview.ps1 -Force
+          Copy-Item deploy/preview/windows/activate-staged-preview.ps1 dist/deploy/activate-staged-preview.ps1 -Force
       - name: Create release archive
         id: archive
         shell: pwsh
@@ -84,6 +87,16 @@ jobs:
           Compress-Archive -Path dist/* -DestinationPath $archive -CompressionLevel Optimal
           $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
           "$hash  $archive" | Set-Content -Encoding ascii "$archive.sha256"
+          [ordered]@{
+            schemaVersion = 1
+            repository = '${{ github.repository }}'
+            version = $env:RELEASE_VERSION
+            commit = '${{ github.sha }}'
+            archive = $archive
+            sha256 = $hash
+            selfContained = [System.Convert]::ToBoolean($env:SELF_CONTAINED)
+            deploymentMode = 'synthetic-preview'
+          } | ConvertTo-Json | Set-Content -Encoding utf8 release-manifest.json
           "archive=$archive" >> $env:GITHUB_OUTPUT
       - name: Upload dry-run or release artifacts
         uses: actions/upload-artifact@v6
@@ -92,6 +105,7 @@ jobs:
           path: |
             ${{ steps.archive.outputs.archive }}
             ${{ steps.archive.outputs.archive }}.sha256
+            release-manifest.json
           if-no-files-found: error
           retention-days: 30
       - name: Attest release archive
@@ -109,6 +123,7 @@ jobs:
             'release', 'create', $env:RELEASE_VERSION,
             '${{ steps.archive.outputs.archive }}',
             '${{ steps.archive.outputs.archive }}.sha256',
+            'release-manifest.json',
             '--target', '${{ github.sha }}',
             '--generate-notes',
             '--title', "Recall Vault $env:RELEASE_VERSION"

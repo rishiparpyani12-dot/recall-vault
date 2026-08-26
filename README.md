@@ -156,7 +156,7 @@ The test suite verifies encrypted creation and restart, protected-key creation a
 
 Architecture, security tradeoffs, operations, and planned work are in [ADR 0001](docs/adr-0001-milestone-1-architecture.md), [ADR 0002](docs/adr-0002-encryption-at-rest.md), the [threat model](docs/threat-model.md), the [security and operations runbook](docs/security-operations.md), and the [Milestone 1 plan](docs/milestone-1-plan.md).
 
-CI, dry-run packaging, and GitHub Release instructions are in the [release guide](docs/releases.md).
+CI, dry-run packaging, GitHub Release instructions, and the semi-automatic Windows preview deployment flow are in the [release guide](docs/releases.md). Preview releases are self-contained and include a machine-readable manifest; the server stages verified prereleases but requires explicit local activation.
 
 The opt-in Streamable HTTP MCP host and Windows private dry-run launcher are documented in the [remote preview guide](docs/remote-preview.md). CI verifies authenticated tool discovery and real remember/search calls plus missing-token, hostile-origin, and hostile-host rejection. The existing Linux container preview is paused because the encrypted API runtime is Windows-only; do not deploy it with a plaintext fallback.
 
