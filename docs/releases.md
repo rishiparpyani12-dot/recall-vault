@@ -30,4 +30,4 @@ To enable GitHub artifact attestations, create the repository Actions variable `
 
 ## Current release status
 
-Release archives remain previews until plaintext migration, recovery behavior, and the complete key-failure suite are finished. New Windows vaults use the packaged SQLCipher runtime and a Windows Credential Manager key, but this is not yet a security-complete public release.
+Release archives remain previews for synthetic or replaceable data. The Windows x64 runtime now includes plaintext migration, documented fail-closed recovery behavior, and the complete key-failure suite. It is not yet a security-complete release for valuable data because independent encrypted backup/key recovery, client credential rotation/revocation, monitoring/restore drills, and final packaging/update security review remain unfinished. See the [security and operations runbook](security-operations.md).

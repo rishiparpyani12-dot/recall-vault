@@ -6,7 +6,7 @@
 
 ## Context
 
-Recall Vault currently stores data in ordinary SQLite. Milestone 1 deliberately does not claim encryption at rest, and valuable secrets must not be stored until encryption and key-handling tests are complete.
+Recall Vault originally stored data in ordinary SQLite. This ADR records the decision that led to the implemented Windows x64 encrypted runtime.
 
 The application uses `Microsoft.EntityFrameworkCore.Sqlite`, `Microsoft.Data.Sqlite`, Dapper, SQLite migrations, and FTS5. `Microsoft.Data.Sqlite` does not provide encryption itself; it can send a key to an encryption-capable native SQLite library. The previously convenient no-cost `SQLitePCLRaw.bundle_e_sqlcipher` distribution is deprecated as of SQLitePCLRaw 3.0. Zetetic distributes SQLCipher Community Edition under a BSD-style license, but does not provide official Community Edition .NET packages. A public Recall Vault release therefore needs to own a reproducible native build and update pipeline.
 
@@ -41,7 +41,7 @@ The key must never be accepted from ordinary configuration, command-line argumen
 
 ### Existing databases and recovery
 
-Encryption work must not silently replace or modify an existing plaintext database. A later migration ticket will define an explicit, backup-first conversion using SQLCipher export semantics. Until that migration is implemented, startup must detect an existing plaintext vault and stop with actionable guidance.
+Encryption migration must not silently replace an existing plaintext database without a recoverable intermediate. The implemented flow validates and checkpoints the plaintext source, creates or verifies a retained plaintext backup, exports to a separate SQLCipher candidate, validates it, and atomically replaces the live database. Interrupted candidates are rebuilt; mismatched backups and validation failures stop without replacement.
 
 Missing credentials, a wrong key, an unavailable credential service, an unsupported native provider, and interrupted migration are fatal startup errors. None may fall back to plaintext or create an empty replacement vault.
 
@@ -51,7 +51,20 @@ Missing credentials, a wrong key, an unavailable credential service, an unsuppor
 - The first secure package can be delivered and tested deeply on one OS.
 - Cross-platform clients can still speak HTTP or MCP to a Windows-hosted Recall Vault, but running the encrypted service itself on macOS or Linux is deferred.
 - Public binary distributions must reproduce the SQLCipher Community Edition copyright, license conditions, disclaimer, and applicable dependency notices in user-accessible materials.
-- The current security warning remains in force until provider integration, credential storage, migration behavior, and encryption-at-rest tests are complete.
+- Provider integration, credential storage, migration behavior, and encryption-at-rest tests are complete for Windows x64. The preview warning remains because independent encrypted backup/key recovery, rotation, and cross-platform backends are not implemented.
+
+## Implementation status
+
+Implemented and tested:
+
+- pinned SQLCipher Community Edition native build and provider verification;
+- encrypted creation, FTS5 access, and correct-key restart;
+- random 256-bit Windows Credential Manager key creation and reuse;
+- backup-first legacy plaintext migration and interrupted-candidate recovery;
+- missing, malformed, wrong-key, corrupted-database, and unkeyed-read fail-closed behavior;
+- automated checks that the database key is absent from config, logs, and data-directory files.
+
+The operational limits and recovery procedure are maintained in the [security and operations runbook](security-operations.md).
 
 ## References
 

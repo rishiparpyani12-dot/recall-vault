@@ -154,7 +154,7 @@ The test suite verifies encrypted creation and restart, protected-key creation a
 - `tests`: unit, SQLite integration, and real-process MCP end-to-end tests
 - `docs`: architecture decision, implementation plan, and threat model
 
-Architecture, security tradeoffs, and planned work are in [ADR 0001](docs/adr-0001-milestone-1-architecture.md), the [threat model](docs/threat-model.md), and the [Milestone 1 plan](docs/milestone-1-plan.md).
+Architecture, security tradeoffs, operations, and planned work are in [ADR 0001](docs/adr-0001-milestone-1-architecture.md), [ADR 0002](docs/adr-0002-encryption-at-rest.md), the [threat model](docs/threat-model.md), the [security and operations runbook](docs/security-operations.md), and the [Milestone 1 plan](docs/milestone-1-plan.md).
 
 CI, dry-run packaging, and GitHub Release instructions are in the [release guide](docs/releases.md).
 
