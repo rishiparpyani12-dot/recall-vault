@@ -22,7 +22,7 @@ public sealed class RecallDatabaseKeyProvider(string databasePath, IRecallCreden
                 return cachedKey = storedKey;
             }
 
-            if (File.Exists(databasePath))
+            if (File.Exists(databasePath) && !LegacyDatabaseMigrator.HasPlaintextSqliteHeader(databasePath))
                 throw new InvalidOperationException("The Recall Vault database exists but its protected credential is missing. Restore the credential from backup; no replacement key was generated.");
 
             var generated = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));

@@ -3,10 +3,11 @@ using System.Data;
 
 namespace Recall.Infrastructure;
 
-public sealed class DatabaseInitializer(RecallDbContext db)
+public sealed class DatabaseInitializer(RecallDbContext db, LegacyDatabaseMigrator? legacyMigrator = null)
 {
     public async Task InitializeAsync(CancellationToken ct)
     {
+        if (legacyMigrator is not null) await legacyMigrator.MigrateIfRequiredAsync(ct);
         var connection = db.Database.GetDbConnection();
         var wasClosed = connection.State == ConnectionState.Closed;
         if (wasClosed) await connection.OpenAsync(ct);

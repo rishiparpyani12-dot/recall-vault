@@ -47,6 +47,20 @@ public sealed class RecallDatabaseKeyProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task Legacy_plaintext_database_gets_a_key_for_explicit_migration()
+    {
+        Directory.CreateDirectory(directory);
+        await File.WriteAllBytesAsync(DatabasePath, "SQLite format 3\0"u8.ToArray());
+        var store = new FakeCredentialStore();
+
+        var key = await new RecallDatabaseKeyProvider(DatabasePath, store).GetOrCreateKeyAsync(CancellationToken.None);
+
+        key.Should().MatchRegex("^[0-9A-F]{64}$");
+        store.Secret.Should().Be(key);
+        store.WriteCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Malformed_key_fails_closed()
     {
         var store = new FakeCredentialStore { Secret = "not-a-valid-key" };

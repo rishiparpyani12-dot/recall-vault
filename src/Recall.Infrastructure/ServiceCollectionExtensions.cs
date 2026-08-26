@@ -7,6 +7,7 @@ namespace Recall.Infrastructure;
 public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddRecallInfrastructure(this IServiceCollection services, string databasePath) => services
+        .AddSingleton(provider => new LegacyDatabaseMigrator(databasePath, provider.GetRequiredService<IRecallDatabaseKeyProvider>()))
         .AddDbContext<RecallDbContext>((provider, options) =>
         {
             var key = provider.GetRequiredService<IRecallDatabaseKeyProvider>()
