@@ -8,6 +8,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Recall.Api;
@@ -21,6 +22,8 @@ namespace Recall.IntegrationTests;
 public sealed class ApiWorkflowTests : IAsyncLifetime
 {
     private const string BootstrapToken = "integration-test-bootstrap-token";
+    private const string CorrectDatabaseKey = "B4C28A91E9CF69FB55BBD8A48973920B35F020290E0B7D9B8228EAA26DF85903";
+    private const string WrongDatabaseKey = "C5D39BA2FADF7AFC66CBE9B59A84A31C46F1313A1FC8EAC9339FBB37EFA69014";
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
     private readonly string dataDirectory = Path.Combine(Path.GetTempPath(), "recall-vault-tests", Guid.NewGuid().ToString("N"));
     private WebApplicationFactory<Program>? factory;
@@ -160,16 +163,91 @@ public sealed class ApiWorkflowTests : IAsyncLifetime
         await read.Should().ThrowAsync<SqliteException>();
     }
 
+    [Fact]
+    public async Task Incorrect_key_fails_startup_without_modifying_or_replacing_the_vault()
+    {
+        (await Http.GetAsync("/health")).EnsureSuccessStatusCode();
+        await StopFactoryAsync();
+        var databasePath = Path.Combine(dataDirectory, "recall.db");
+        var before = await File.ReadAllBytesAsync(databasePath);
+
+        await using var wrongKeyFactory = CreateFactory(new FixedDatabaseKeyProvider(WrongDatabaseKey));
+        var start = () => Task.Run(() => wrongKeyFactory.CreateClient());
+
+        await start.Should().ThrowAsync<Exception>();
+        (await File.ReadAllBytesAsync(databasePath)).Should().Equal(before);
+        LegacyDatabaseMigrator.HasPlaintextSqliteHeader(databasePath).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Missing_key_fails_startup_without_modifying_or_replacing_the_vault()
+    {
+        (await Http.GetAsync("/health")).EnsureSuccessStatusCode();
+        await StopFactoryAsync();
+        var databasePath = Path.Combine(dataDirectory, "recall.db");
+        var before = await File.ReadAllBytesAsync(databasePath);
+
+        await using var missingKeyFactory = CreateFactory(new FailingDatabaseKeyProvider("protected database credential is missing"));
+        var start = () => Task.Run(() => missingKeyFactory.CreateClient());
+
+        await start.Should().ThrowAsync<Exception>().WithMessage("*credential is missing*");
+        (await File.ReadAllBytesAsync(databasePath)).Should().Equal(before);
+        File.Exists(databasePath + ".plaintext-backup").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Corrupted_encrypted_database_fails_startup_without_plaintext_fallback()
+    {
+        (await Http.GetAsync("/health")).EnsureSuccessStatusCode();
+        await StopFactoryAsync();
+        var databasePath = Path.Combine(dataDirectory, "recall.db");
+        var corrupted = await File.ReadAllBytesAsync(databasePath);
+        for (var index = 64; index < Math.Min(256, corrupted.Length); index++) corrupted[index] ^= 0xA5;
+        await File.WriteAllBytesAsync(databasePath, corrupted);
+
+        await using var corruptedFactory = CreateFactory();
+        var start = () => Task.Run(() => corruptedFactory.CreateClient());
+
+        await start.Should().ThrowAsync<Exception>();
+        (await File.ReadAllBytesAsync(databasePath)).Should().Equal(corrupted);
+        LegacyDatabaseMigrator.HasPlaintextSqliteHeader(databasePath).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Database_key_is_absent_from_configuration_and_logs()
+    {
+        (await Http.GetAsync("/health")).EnsureSuccessStatusCode();
+        var configuration = factory!.Services.GetRequiredService<IConfiguration>();
+        configuration.AsEnumerable().Select(item => item.Value).Should().NotContain(CorrectDatabaseKey);
+
+        await StopFactoryAsync();
+        var logText = string.Join('\n', Directory.Exists(Path.Combine(dataDirectory, "logs"))
+            ? Directory.GetFiles(Path.Combine(dataDirectory, "logs"), "*.log").Select(File.ReadAllText)
+            : []);
+        logText.Should().NotContain(CorrectDatabaseKey);
+        var keyBytes = Encoding.UTF8.GetBytes(CorrectDatabaseKey);
+        foreach (var path in Directory.GetFiles(dataDirectory, "*", SearchOption.AllDirectories))
+            (await File.ReadAllBytesAsync(path)).AsSpan().IndexOf(keyBytes).Should().Be(-1, $"the database key must not be persisted in {Path.GetFileName(path)}");
+    }
+
     private HttpClient Http => http ?? throw new InvalidOperationException("Test client has not been initialized.");
-    private WebApplicationFactory<Program> CreateFactory() => new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+    private WebApplicationFactory<Program> CreateFactory(IRecallDatabaseKeyProvider? keyProvider = null) => new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
         .UseSetting("Recall:DataDirectory", dataDirectory)
         .UseSetting("Recall:BootstrapToken", BootstrapToken)
         .UseSetting("Recall:Url", "http://127.0.0.1:0")
         .ConfigureServices(services =>
         {
             services.RemoveAll<IRecallDatabaseKeyProvider>();
-            services.AddSingleton<IRecallDatabaseKeyProvider>(new TestDatabaseKeyProvider());
+            services.AddSingleton(keyProvider ?? new FixedDatabaseKeyProvider(CorrectDatabaseKey));
         }));
+    private async Task StopFactoryAsync()
+    {
+        http?.Dispose();
+        http = null;
+        if (factory is not null) await factory.DisposeAsync();
+        factory = null;
+        SqliteConnection.ClearAllPools();
+    }
     private async Task<HttpResponseMessage> RegisterAsync(RegisterClientRequest request)
     {
         using var message = new HttpRequestMessage(HttpMethod.Post, "/v1/clients") { Content = JsonContent.Create(request) };
@@ -190,9 +268,13 @@ public sealed class ApiWorkflowTests : IAsyncLifetime
         return options;
     }
 
-    private sealed class TestDatabaseKeyProvider : IRecallDatabaseKeyProvider
+    private sealed class FixedDatabaseKeyProvider(string key) : IRecallDatabaseKeyProvider
     {
-        private const string Key = "B4C28A91E9CF69FB55BBD8A48973920B35F020290E0B7D9B8228EAA26DF85903";
-        public ValueTask<string> GetOrCreateKeyAsync(CancellationToken cancellationToken) => ValueTask.FromResult(Key);
+        public ValueTask<string> GetOrCreateKeyAsync(CancellationToken cancellationToken) => ValueTask.FromResult(key);
+    }
+
+    private sealed class FailingDatabaseKeyProvider(string message) : IRecallDatabaseKeyProvider
+    {
+        public ValueTask<string> GetOrCreateKeyAsync(CancellationToken cancellationToken) => ValueTask.FromException<string>(new InvalidOperationException(message));
     }
 }

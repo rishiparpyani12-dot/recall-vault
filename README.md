@@ -2,7 +2,7 @@
 
 Recall Vault is a local-first, user-controlled memory service for multiple AI clients. It provides one permissioned memory vault for applications such as Codex, Claude Desktop, Cursor, ChatGPT, Claude, and Gemini. This repository currently contains the Milestone 1 backend, local HTTP API, and stdio MCP adapter.
 
-> Security status: Windows vaults use the pinned SQLCipher Community Edition build and a random 256-bit key stored in Windows Credential Manager. Legacy plaintext databases are migrated through a validated backup-first process. Key-loss recovery and the complete fail-closed test matrix remain unfinished, so do not store valuable secrets yet.
+> Security status: Windows vaults use the pinned SQLCipher Community Edition build and a random 256-bit key stored in Windows Credential Manager. Legacy plaintext databases are migrated through a validated backup-first process, and automated tests cover missing, wrong, malformed, and corrupted-key/database failure paths. Key-loss recovery remains unfinished, so do not store valuable secrets yet.
 
 ## Prerequisites
 
@@ -142,7 +142,7 @@ List, permission, and access-history results use `offset`, a maximum `limit` of 
 dotnet test RecallVault.slnx
 ```
 
-The test suite verifies encrypted creation and restart, protected-key creation and reuse, missing/malformed credential failures, credential-store write failures, backup-first plaintext migration, interrupted-candidate recovery, mismatched-backup refusal, a non-plaintext database header, absence of a known memory marker in database bytes, rejection of unkeyed reads, FTS5 behavior, authorization, and the authenticated HTTP/MCP workflows.
+The test suite verifies encrypted creation and restart, protected-key creation and reuse, missing/malformed/wrong-key failures, corrupted-database refusal, credential-store write failures, backup-first plaintext migration, interrupted-candidate recovery, mismatched-backup refusal, byte-for-byte vault immutability after failed startup, a non-plaintext database header, absence of memory markers and database keys from data-directory files, rejection of unkeyed reads, FTS5 behavior, authorization, and the authenticated HTTP/MCP workflows.
 
 ## Repository layout
 
@@ -164,7 +164,7 @@ The first encryption-at-rest runtime is Windows-only. It uses reproducible build
 
 ## Current limitations
 
-- Lost-key recovery, key rotation, backup/restore, and the complete wrong/missing-key test matrix are pending.
+- Lost-key recovery, key rotation, and encrypted backup/restore tooling are pending.
 - The encrypted API runtime currently supports Windows x64 only; the Linux container preview cannot host it.
 - No desktop UI, installer, browser extension, or cloud synchronization.
 - Client administration, token rotation, and revocation tools are not implemented.
