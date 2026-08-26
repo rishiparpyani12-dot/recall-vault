@@ -28,13 +28,11 @@ if (staticTokenMode && (string.IsNullOrWhiteSpace(previewToken) || Encoding.UTF8
 var allowedOrigins = builder.Configuration.GetSection("RecallPreview:AllowedOrigins").Get<string[]>() ?? [];
 if (allowedOrigins.Length == 0)
     throw new InvalidOperationException("At least one RecallPreview__AllowedOrigins entry is required.");
-var normalizedOrigins = allowedOrigins
-    .Select(origin => origin.TrimEnd('/'))
-    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+var normalizedOrigins = NormalizeOrigins(allowedOrigins);
 var allowedHosts = builder.Configuration.GetSection("RecallPreview:AllowedHosts").Get<string[]>() ?? [];
 if (allowedHosts.Length == 0)
     throw new InvalidOperationException("At least one RecallPreview__AllowedHosts entry is required.");
-var normalizedHosts = allowedHosts.ToHashSet(StringComparer.OrdinalIgnoreCase);
+var normalizedHosts = NormalizeHosts(allowedHosts);
 
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 1_048_576);
 builder.Services.AddRateLimiter(options => options.AddFixedWindowLimiter("mcp", limiter =>
@@ -173,6 +171,35 @@ static Uri RequireHttpsUri(string? value, string setting)
     if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
         throw new InvalidOperationException($"{setting} must be an absolute HTTPS URL.");
     return uri;
+}
+
+static HashSet<string> NormalizeOrigins(IEnumerable<string> origins)
+{
+    var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var value in origins)
+    {
+        var candidate = value?.Trim().TrimEnd('/');
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
+            !string.IsNullOrEmpty(uri.UserInfo) || uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) ||
+            !string.Equals(candidate, uri.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Every RecallPreview__AllowedOrigins entry must be an exact HTTPS origin with no path, query, fragment, credentials, or wildcard.");
+        result.Add(candidate);
+    }
+    return result;
+}
+
+static HashSet<string> NormalizeHosts(IEnumerable<string> hosts)
+{
+    var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var value in hosts)
+    {
+        var candidate = value?.Trim();
+        if (string.IsNullOrWhiteSpace(candidate) || candidate.Contains('*') || candidate.Contains('/') || candidate.Contains(':') ||
+            !Uri.CheckHostName(candidate).Equals(UriHostNameType.Dns) && !Uri.CheckHostName(candidate).Equals(UriHostNameType.IPv4))
+            throw new InvalidOperationException("Every RecallPreview__AllowedHosts entry must be an exact DNS name or IPv4 address without a scheme, port, path, or wildcard.");
+        result.Add(candidate);
+    }
+    return result;
 }
 
 static IReadOnlyDictionary<string, RecallClientCredentials> LoadTenants(IConfigurationSection section)

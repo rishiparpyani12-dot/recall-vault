@@ -158,7 +158,7 @@ Architecture, security tradeoffs, operations, and planned work are in [ADR 0001]
 
 CI, dry-run packaging, and GitHub Release instructions are in the [release guide](docs/releases.md).
 
-The opt-in Streamable HTTP MCP host is documented in the [remote preview guide](docs/remote-preview.md). The existing Linux container preview is paused because the encrypted API runtime is Windows-only; do not deploy it with a plaintext fallback.
+The opt-in Streamable HTTP MCP host and Windows private dry-run launcher are documented in the [remote preview guide](docs/remote-preview.md). CI verifies authenticated tool discovery and real remember/search calls plus missing-token, hostile-origin, and hostile-host rejection. The existing Linux container preview is paused because the encrypted API runtime is Windows-only; do not deploy it with a plaintext fallback.
 
 The first encryption-at-rest runtime is Windows-only. It uses reproducible builds of SQLCipher Community Edition and Windows Credential Manager for the database key. Public binary releases include build provenance, checksums, an SBOM, and required third-party notices. [ADR 0002](docs/adr-0002-encryption-at-rest.md) records the decision and remaining recovery prerequisites.
 

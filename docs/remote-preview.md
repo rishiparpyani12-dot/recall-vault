@@ -35,25 +35,42 @@ Add more mappings with `Tenants__1`, `Tenants__2`, and so on. Startup rejects du
 
 Keep all token values in the deployment platform's secret store. Never commit `.env.preview`.
 
-## Local container smoke test
+## Windows private dry run
 
-1. Copy `deploy/preview/.env.preview.example` to `deploy/preview/.env.preview` and replace every placeholder with test-only values.
-2. Start only the API, register a least-privilege preview client through the existing bootstrap flow, and place the returned client ID/token in `.env.preview`. For OAuth mode, register one distinct client per OIDC subject.
-3. Start the stack behind a TLS reverse proxy or private tunnel:
+1. Build SQLCipher and the Release solution. Register one least-privilege Recall client per tester using the local API bootstrap flow.
+2. Stop the registration instance and remove `Recall__BootstrapToken` from the preview process environment. In a private PowerShell session, inject the MCP variables in the tables above from your secret manager. Do not save them in a script, profile, transcript, or repository file.
+3. Start the Windows processes on loopback:
 
    ```powershell
-   docker compose --env-file deploy/preview/.env.preview -f deploy/preview/compose.yml up --build
+   ./eng/sqlcipher/build-windows.ps1
+   dotnet build RecallVault.slnx -c Release
+   ./deploy/preview/windows/start-private-preview.ps1
    ```
 
-The compose file binds the MCP port to `127.0.0.1:8080`; it is not exposed to the LAN or internet. Point a TLS tunnel or reverse proxy at that loopback address. The remote MCP URL is `https://your-preview-host.example/mcp`.
+The launcher refuses non-loopback process bindings, validates required settings, starts the API and MCP host with hidden windows, waits for both health checks, and returns their process IDs. Put a reviewed TLS reverse proxy or private identity-aware tunnel in front of `127.0.0.1:8080`; preserve the original public `Host` header. The connector URL is `https://your-preview-host.example/mcp`.
+
+The old Linux Compose files are retained only as paused design artifacts and are assigned a non-default `paused-linux-plaintext-incompatible` profile. Do not enable that profile: the current API deliberately refuses Linux because it cannot provide the reviewed Windows Credential Manager key backend.
+
+### External configuration still required
+
+Before a real ChatGPT or Claude connection, the operator must choose and configure:
+
+- an OIDC provider compatible with the target client plan;
+- a Windows x64 VM or host for the encrypted runtime;
+- an HTTPS domain or generated private-tunnel URL;
+- OAuth client registrations and exact callbacks required by ChatGPT and Claude;
+- one distinct least-privilege Recall client and tenant mapping per tester;
+- platform secret injection, monitoring, cold backup, and a restore drill.
+
+These are deployment-account actions, not repository defaults. Do not commit provider metadata containing secrets. `StaticToken` is only for local/API-level smoke testing and is not an acceptable public connector configuration.
 
 ## Client compatibility
 
-- The OpenAI Responses API can send the static preview bearer token as an MCP request header, making it suitable for a controlled API-level smoke test.
+- The OpenAI Responses API can send the static preview bearer token as an MCP request header, making it suitable for a controlled API-level smoke test. ChatGPT connector preview should use OAuth mode.
 - OAuth mode publishes protected-resource metadata at `/.well-known/oauth-protected-resource`, validates issuer and audience through the configured OIDC provider, and challenges unauthenticated MCP requests with that metadata URL.
 - The configured provider must support the client registration and authorization flow required by the target ChatGPT or Claude plan. Recall Vault does not issue authorization codes or tokens itself.
 - The existing `Recall.Mcp` executable remains the supported local `stdio` path for Claude Desktop and other local MCP clients.
 
 ## Promotion gates
 
-Do not remove the test-data-only label until encryption at rest, OS-protected keys, fail-closed migration/recovery, encryption tests, OAuth, tenant isolation, TLS, backups, and operational documentation are complete.
+Encryption at rest, OS-protected keys, fail-closed migration, encryption tests, OAuth validation, subject-to-client mapping, and operational documentation are implemented. Do not remove the test-data-only label until a real private deployment has passed ChatGPT and Claude connector tests over TLS and the operator has demonstrated monitoring plus independent encrypted backup/key recovery and restore.

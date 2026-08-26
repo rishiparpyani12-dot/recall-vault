@@ -1,5 +1,6 @@
 services:
   api:
+    profiles: ["paused-linux-plaintext-incompatible"]
     build:
       context: ../..
       dockerfile: deploy/preview/Dockerfile.api
@@ -14,6 +15,7 @@ services:
       - "8080"
 
   mcp:
+    profiles: ["paused-linux-plaintext-incompatible"]
     build:
       context: ../..
       dockerfile: deploy/preview/Dockerfile.mcp-http
