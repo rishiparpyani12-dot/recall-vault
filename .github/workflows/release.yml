@@ -57,14 +57,14 @@ jobs:
             throw "Invalid release version: $env:RELEASE_VERSION"
           }
       - run: dotnet restore RecallVault.slnx --configfile NuGet.Config
+      - name: Build and verify SQLCipher
+        shell: pwsh
+        run: ./eng/sqlcipher/build-windows.ps1
       - run: dotnet build RecallVault.slnx --no-restore --configuration Release
       - run: dotnet test RecallVault.slnx --no-build --configuration Release
       - run: dotnet restore src/Recall.Api/Recall.Api.csproj --runtime win-x64 --configfile NuGet.Config
       - run: dotnet restore src/Recall.Mcp/Recall.Mcp.csproj --runtime win-x64 --configfile NuGet.Config
       - run: dotnet restore src/Recall.Mcp.Http/Recall.Mcp.Http.csproj --runtime win-x64 --configfile NuGet.Config
-      - name: Build and verify SQLCipher
-        shell: pwsh
-        run: ./eng/sqlcipher/build-windows.ps1
       - name: Publish applications
         shell: pwsh
         run: |
