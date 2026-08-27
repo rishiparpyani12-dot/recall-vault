@@ -60,10 +60,16 @@ public sealed class McpProcessTests : IAsyncLifetime
         var safeRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "recall-vault-e2e"));
         if (resolved.StartsWith(safeRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {
-            for (var attempt = 0; attempt < 5 && Directory.Exists(resolved); attempt++)
+            const int maximumAttempts = 10;
+            for (var attempt = 1; attempt <= maximumAttempts && Directory.Exists(resolved); attempt++)
             {
                 try { Directory.Delete(resolved, recursive: true); }
-                catch (IOException) when (attempt < 4) { await Task.Delay(100); }
+                catch (Exception exception) when (
+                    attempt < maximumAttempts &&
+                    exception is IOException or UnauthorizedAccessException)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt));
+                }
             }
         }
     }
