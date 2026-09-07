@@ -6,8 +6,8 @@ Trust boundary: AI output, MCP arguments, stored memory content, and every local
 |---|---|---|
 | Local process calls API | Loopback bind, per-client bearer token | OS ACL/IPC option, rate limits, replay protection |
 | Over-permissioned client | Exact category and sensitivity ceiling, deny by default, audit | Permission review UI and time-bound grants |
-| Database theft | SQLCipher Community Edition; random 256-bit key in the current user's Windows Credential Manager; unkeyed-read tests | Independent encrypted backup/key recovery; packaging review; macOS/Linux backends |
-| Missing, wrong, or malformed database key | Startup fails closed; encrypted file remains byte-for-byte unchanged; no plaintext/config fallback | Supported key/device-loss recovery and key rotation |
+| Database theft or device/key loss | SQLCipher; random 256-bit key in Windows Credential Manager; password-encrypted portable recovery package with authenticated database/key payload | Crash-point restore journal, scheduled backups/recovery drills, key rotation, packaging review, macOS/Linux backends |
+| Missing, wrong, or malformed database key | Startup fails closed; encrypted file remains byte-for-byte unchanged; password-encrypted portable recovery restores database and key | Clean-machine recovery drills, crash journaling, and key rotation |
 | Legacy plaintext database | Integrity check, WAL checkpoint, verified plaintext backup, separate encrypted export, atomic replacement | Operator removal of retained plaintext copies; secure-erasure claims are explicitly excluded |
 | Secrets/content in logs or config | Structured logs omit bodies/auth headers; automated tests prove the database key is absent from config, logs, and data-directory files | Broader log-redaction tests for future endpoints and hosted components |
 | Prompt injection | Authorization is outside model control; content treated as data | Client-side rendering and instruction-boundary guidance |

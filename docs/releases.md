@@ -52,4 +52,4 @@ The checksum protects against corruption and unintentional replacement but share
 
 ## Current release status
 
-Release archives remain previews for synthetic or replaceable data. The Windows x64 runtime now includes plaintext migration, documented fail-closed recovery behavior, and the complete key-failure suite. It is not yet a security-complete release for valuable data because independent encrypted backup/key recovery, client credential rotation/revocation, monitoring/restore drills, and final packaging/update security review remain unfinished. See the [security and operations runbook](security-operations.md).
+Release archives remain previews for synthetic or replaceable data. The Windows x64 runtime includes plaintext migration, portable password-encrypted database/key recovery packages, documented fail-closed behavior, and the complete key-failure suite. It is not yet a security-complete release for valuable data because crash-point restore journaling, credential rotation/revocation, monitoring and clean-machine restore drills, and final packaging/update security review remain unfinished. See the [security and operations runbook](security-operations.md).

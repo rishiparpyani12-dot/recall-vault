@@ -2,7 +2,7 @@
 
 Recall Vault is a local-first, user-controlled memory service for multiple AI clients. It provides one permissioned memory vault for applications such as Codex, Claude Desktop, Cursor, ChatGPT, Claude, and Gemini. This repository currently contains the Milestone 1 backend, local HTTP API, and stdio MCP adapter.
 
-> Security status: Windows vaults use the pinned SQLCipher Community Edition build and a random 256-bit key stored in Windows Credential Manager. Legacy plaintext databases are migrated through a validated backup-first process, and automated tests cover missing, wrong, malformed, and corrupted-key/database failure paths. Key-loss recovery remains unfinished, so do not store valuable secrets yet.
+> Security status: Windows vaults use the pinned SQLCipher Community Edition build and a random 256-bit key stored in Windows Credential Manager. Legacy plaintext databases use validated backup-first migration, and portable password-encrypted recovery packages preserve both the database and its key. Durable crash recovery and clean-machine restore drills remain unfinished, so use only synthetic or replaceable data.
 
 ## Prerequisites
 
@@ -34,7 +34,7 @@ The API refuses to start without the verified SQLCipher provider. On first run i
 
 At startup, a database with SQLite's plaintext header is integrity-checked, any committed WAL data is checkpointed into the main file, and obsolete WAL sidecars are removed. Recall Vault then creates `recall.db.plaintext-backup` using write-through I/O, verifies any pre-existing backup matches the source byte-for-byte, exports into a separate keyed SQLCipher candidate, validates that candidate, and atomically replaces `recall.db`. A partial `.migration` candidate from an interrupted attempt is discarded and rebuilt from the verified plaintext source and matching backup.
 
-The plaintext backup is deliberately retained for rollback and contains all legacy memory content. After starting the migrated vault and verifying the expected records, move that backup to protected offline storage or securely delete it according to your retention policy. Never upload or commit it. If the backup does not match the source, or either database fails validation, startup stops and leaves the source untouched; resolve the files manually rather than renaming or deleting the active vault. Losing the Windows credential after replacement is not recoverable yet.
+The plaintext backup is deliberately retained for rollback and contains all legacy memory content. After starting the migrated vault and verifying the expected records, create and test a portable encrypted recovery package, then move the plaintext backup to protected offline storage or securely delete it according to your retention policy. Never upload or commit it. If the backup does not match the source, or either database fails validation, startup stops and leaves the source untouched; resolve the files manually rather than renaming or deleting the active vault.
 
 Register a client from a second shell. Save the returned token: it is shown only once.
 
@@ -142,7 +142,18 @@ List, permission, and access-history results use `offset`, a maximum `limit` of 
 dotnet test RecallVault.slnx
 ```
 
-The test suite verifies encrypted creation and restart, protected-key creation and reuse, missing/malformed/wrong-key failures, corrupted-database refusal, credential-store write failures, backup-first plaintext migration, interrupted-candidate recovery, mismatched-backup refusal, byte-for-byte vault immutability after failed startup, a non-plaintext database header, absence of memory markers and database keys from data-directory files, rejection of unkeyed reads, FTS5 behavior, authorization, and the authenticated HTTP/MCP workflows.
+The test suite verifies encrypted creation and restart, protected-key creation and reuse, missing/malformed/wrong-key failures, corrupted-database refusal, credential-store write failures, backup-first plaintext migration, portable password-encrypted backup/restore, wrong-password and corruption refusal, pre-restore rollback packages, interrupted-candidate recovery, mismatched-backup refusal, byte-for-byte vault immutability after failed startup, a non-plaintext database header, absence of memory markers and database keys from data-directory files, rejection of unkeyed reads, FTS5 behavior, authorization, and the authenticated HTTP/MCP workflows.
+
+## Create and restore a recovery backup
+
+Stop the Recall API before maintenance. The password is requested through a non-echoing interactive console and is never accepted in arguments or environment variables.
+
+```powershell
+dotnet run --project src/Recall.Worker -- backup "$env:LOCALAPPDATA\RecallVault" "D:\RecallBackups\vault.recall-backup"
+dotnet run --project src/Recall.Worker -- restore "$env:LOCALAPPDATA\RecallVault" "D:\RecallBackups\vault.recall-backup"
+```
+
+Use a unique recovery passphrase of at least 12 characters and store it separately from the backup. Recall Vault cannot recover it. Restore validates the candidate before changing the live vault and, when replacing an existing vault, creates an encrypted `.pre-restore` rollback package beside the input backup. Never commit or upload recovery packages.
 
 ## Repository layout
 
@@ -154,7 +165,7 @@ The test suite verifies encrypted creation and restart, protected-key creation a
 - `tests`: unit, SQLite integration, and real-process MCP end-to-end tests
 - `docs`: architecture decision, implementation plan, and threat model
 
-Architecture, security tradeoffs, operations, and planned work are in [ADR 0001](docs/adr-0001-milestone-1-architecture.md), [ADR 0002](docs/adr-0002-encryption-at-rest.md), the [threat model](docs/threat-model.md), the [security and operations runbook](docs/security-operations.md), and the [Milestone 1 plan](docs/milestone-1-plan.md).
+Architecture, security tradeoffs, operations, and planned work are in [ADR 0001](docs/adr-0001-milestone-1-architecture.md), [ADR 0002](docs/adr-0002-encryption-at-rest.md), [ADR 0003](docs/adr-0003-portable-recovery-backups.md), the [threat model](docs/threat-model.md), the [security and operations runbook](docs/security-operations.md), and the [Milestone 1 plan](docs/milestone-1-plan.md).
 
 CI, dry-run packaging, GitHub Release instructions, and the semi-automatic Windows preview deployment flow are in the [release guide](docs/releases.md). Preview releases are self-contained and include a machine-readable manifest; the server stages verified prereleases but requires explicit local activation.
 
@@ -164,13 +175,13 @@ The first encryption-at-rest runtime is Windows-only. It uses reproducible build
 
 ## Current limitations
 
-- Lost-key recovery, key rotation, and encrypted backup/restore tooling are pending.
+- Portable password-encrypted backup/restore is available in preview; durable crash recovery, scheduled backups, recovery drills, password change, and database-key rotation remain pending.
 - The encrypted API runtime currently supports Windows x64 only; the Linux container preview cannot host it.
 - No desktop UI, installer, browser extension, or cloud synchronization.
 - Client administration, token rotation, and revocation tools are not implemented.
 - Registration is an operator API guarded by a bootstrap secret; token rotation/revocation endpoints and rate limiting are pending.
 - Audit rows are application-immutable, not cryptographically tamper-evident.
-- Permanent purge, vacuum, encrypted backup tooling, and automated key recovery are pending.
+- Permanent purge, vacuum, scheduled backup policy, and automated recovery orchestration are pending.
 
 ## Documentation maintenance
 

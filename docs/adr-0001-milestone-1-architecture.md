@@ -14,7 +14,7 @@ Status: accepted for Milestone 1 (2026-08-24)
 
 ## Consequences
 
-The shared service supports multiple clients and central audit policy, while compromise of an MCP adapter does not directly grant database-file access. Loopback bearer authentication reduces—but does not eliminate—risk from another process running as the same OS user. SQLCipher integration and database-key storage are complete for Windows x64. Independent backup/key recovery, client-token rotation and revocation, replay resistance, and cross-platform key backends remain security work.
+The shared service supports multiple clients and central audit policy, while compromise of an MCP adapter does not directly grant database-file access. Loopback bearer authentication reduces—but does not eliminate—risk from another process running as the same OS user. SQLCipher integration, database-key storage, and portable password-encrypted recovery packages are complete for Windows x64. Crash-point restore recovery, credential rotation/revocation, replay resistance, and cross-platform key backends remain security work.
 
 ## Primary references
 

@@ -73,4 +73,4 @@ These are deployment-account actions, not repository defaults. Do not commit pro
 
 ## Promotion gates
 
-Encryption at rest, OS-protected keys, fail-closed migration, encryption tests, OAuth validation, subject-to-client mapping, and operational documentation are implemented. Do not remove the test-data-only label until a real private deployment has passed ChatGPT and Claude connector tests over TLS and the operator has demonstrated monitoring plus independent encrypted backup/key recovery and restore.
+Encryption at rest, OS-protected keys, fail-closed migration, portable encrypted recovery packages, encryption tests, OAuth validation, subject-to-client mapping, and operational documentation are implemented. Do not remove the test-data-only label until a real private deployment has passed ChatGPT and Claude connector tests over TLS and the operator has demonstrated monitoring plus a clean-machine backup/restore drill.

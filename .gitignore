@@ -3,6 +3,8 @@ obj/
 artifacts/
 dist/
 recall-vault-v*-win-x64.zip*
+*.recall-backup
+*.recall-backup.*
 .vs/
 .idea/
 *.user

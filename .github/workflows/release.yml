@@ -65,6 +65,7 @@ jobs:
       - run: dotnet restore src/Recall.Api/Recall.Api.csproj --runtime win-x64 --configfile NuGet.Config
       - run: dotnet restore src/Recall.Mcp/Recall.Mcp.csproj --runtime win-x64 --configfile NuGet.Config
       - run: dotnet restore src/Recall.Mcp.Http/Recall.Mcp.Http.csproj --runtime win-x64 --configfile NuGet.Config
+      - run: dotnet restore src/Recall.Worker/Recall.Worker.csproj --runtime win-x64 --configfile NuGet.Config
       - name: Publish applications
         shell: pwsh
         run: |
@@ -72,6 +73,7 @@ jobs:
           dotnet publish src/Recall.Api/Recall.Api.csproj --configuration Release --runtime win-x64 --self-contained $env:SELF_CONTAINED --no-restore -p:Version=$version --output dist/Recall.Api
           dotnet publish src/Recall.Mcp/Recall.Mcp.csproj --configuration Release --runtime win-x64 --self-contained $env:SELF_CONTAINED --no-restore -p:Version=$version --output dist/Recall.Mcp
           dotnet publish src/Recall.Mcp.Http/Recall.Mcp.Http.csproj --configuration Release --runtime win-x64 --self-contained $env:SELF_CONTAINED --no-restore -p:Version=$version --output dist/Recall.Mcp.Http
+          dotnet publish src/Recall.Worker/Recall.Worker.csproj --configuration Release --runtime win-x64 --self-contained $env:SELF_CONTAINED --no-restore -p:Version=$version --output dist/Recall.Worker
           New-Item -ItemType Directory -Force dist/native | Out-Null
           Copy-Item artifacts/sqlcipher/win-x64/output/* dist/native -Recurse -Force
           Copy-Item README.md, LICENSE dist -Force

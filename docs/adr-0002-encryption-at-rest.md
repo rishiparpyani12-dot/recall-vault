@@ -51,7 +51,7 @@ Missing credentials, a wrong key, an unavailable credential service, an unsuppor
 - The first secure package can be delivered and tested deeply on one OS.
 - Cross-platform clients can still speak HTTP or MCP to a Windows-hosted Recall Vault, but running the encrypted service itself on macOS or Linux is deferred.
 - Public binary distributions must reproduce the SQLCipher Community Edition copyright, license conditions, disclaimer, and applicable dependency notices in user-accessible materials.
-- Provider integration, credential storage, migration behavior, and encryption-at-rest tests are complete for Windows x64. The preview warning remains because independent encrypted backup/key recovery, rotation, and cross-platform backends are not implemented.
+- Provider integration, credential storage, migration behavior, encryption-at-rest tests, and portable password-encrypted recovery packages are complete for Windows x64. The preview warning remains because crash-point restore journaling, recovery drills, rotation, and cross-platform backends are not implemented.
 
 ## Implementation status
 

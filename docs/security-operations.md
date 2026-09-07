@@ -24,7 +24,9 @@ Treat the entire data directory as sensitive. The plaintext backup has no encryp
 
 ## Cold backup
 
-Recall Vault does not yet provide an encrypted backup command or a supported database-key export. A database-only copy is therefore not an independent disaster-recovery backup: it remains usable only while the matching Windows credential is available to the same user context.
+Recall Vault provides preview `Recall.Worker backup` and `restore` commands that create a password-encrypted recovery package containing a consistent SQLCipher snapshot and its database key. A database-only copy is not an independent disaster-recovery backup: it remains usable only while the matching Windows credential is available to the same user context.
+
+Stop the API, then run `dotnet run --project src/Recall.Worker -- backup <data-directory> <backup-file>`. Store the unique recovery password separately. Test restoration into an empty disposable data directory before relying on the package. Restore refuses active SQLite sidecars and validates authentication plus database integrity before replacement. An existing vault is first preserved as an encrypted `<backup-file>.pre-restore` package.
 
 For a same-machine rollback copy:
 
@@ -34,7 +36,7 @@ For a same-machine rollback copy:
 4. Record the application version, commit or release, Windows account, backup time, and whether `recall.db.plaintext-backup` exists. Do not record secret values.
 5. Restart Recall Vault and verify `/health`, a permitted memory read, and a search.
 
-Do not use a live filesystem copy as a consistency guarantee. Automated off-machine backup and credential recovery remain release blockers for valuable data.
+Do not use a live filesystem copy as a consistency guarantee. Scheduled off-machine backups, durable crash recovery, and clean-machine recovery drills remain release blockers for valuable data.
 
 ## Restore on the same Windows user profile
 
@@ -64,7 +66,7 @@ To roll back while the plaintext backup is retained, stop all Recall processes, 
 
 | Symptom | Meaning | Safe action |
 | --- | --- | --- |
-| Protected credential missing or malformed with an encrypted database | The vault cannot be decrypted | Stop; preserve the database and investigate the Windows profile/credential. No automated recovery exists. |
+| Protected credential missing or malformed with an encrypted database | The vault cannot be decrypted normally | Stop and preserve the database. Restore a tested portable recovery package into a controlled data directory; do not generate a replacement key or rename/delete the inaccessible vault. |
 | Wrong key or `file is not a database` during startup | Credential and database do not match, or the database is corrupt | Stop; preserve both. Restore only a known matching cold copy under the original user profile. |
 | Plaintext backup does not match the source | A previous, foreign, or partial backup occupies the rollback path | Stop; preserve both files and resolve provenance manually. Do not delete either during triage. |
 | `.migration` remains after interruption | An export did not complete | Preserve evidence if investigating; otherwise the next startup rebuilds it only when the plaintext source and backup validate. |
@@ -76,7 +78,7 @@ To roll back while the plaintext backup is retained, stop all Recall processes, 
 1. Contain: stop Recall services and revoke network or tunnel exposure. If a client token may be compromised, stop the API because token revocation is not implemented yet.
 2. Preserve: make read-only copies of the data directory and relevant logs. Record times, release or commit, OS account, observed errors, and affected client IDs without copying secret values into tickets.
 3. Classify: determine whether the incident involves a client or bootstrap token, database key, plaintext migration backup, encrypted database, host account, or native dependency.
-4. Recover: restore only from a verified cold copy with its matching Windows credential. If the database key is lost and no plaintext migration backup exists, the encrypted vault is currently unrecoverable.
+4. Recover: restore from a verified portable recovery package using its separately stored password. If no recovery package, matching Windows credential, or retained plaintext migration backup exists, the encrypted vault is unrecoverable.
 5. Validate: verify health, representative reads and searches, permissions, and access history before reopening client access.
 6. Learn: document scope and timeline, rotate externally managed bootstrap or client credentials where possible, preserve evidence, and open remediation work. Do not publish memory content, keys, tokens, databases, or raw sensitive logs.
 
@@ -84,8 +86,7 @@ To roll back while the plaintext backup is retained, stop all Recall processes, 
 
 The implemented Windows runtime has SQLCipher integration, OS-protected key creation and reuse, backup-first plaintext migration, fail-closed behavior, and automated encryption tests. It is still a preview for synthetic or replaceable data until all of the following are demonstrated:
 
-- independent encrypted backup and restore, including the database key;
-- a tested key-loss and device-loss recovery path;
+- durable crash-point recovery journaling and clean-machine restore drills for the encrypted database/key package;
 - client and bootstrap token rotation and revocation;
 - operational monitoring and restore drills;
 - security review of packaging, installer and update behavior, and hosted OAuth/TLS deployment where applicable.
