@@ -126,6 +126,87 @@ public sealed class ApiWorkflowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Operator_credentials_are_required_for_client_administration()
+    {
+        var missing = await Http.GetAsync("/v1/admin/clients?offset=0&limit=20");
+        missing.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var wrongRequest = new HttpRequestMessage(HttpMethod.Get, "/v1/admin/clients?offset=0&limit=20");
+        wrongRequest.Headers.Add("X-Recall-Bootstrap-Token", "wrong-operator-token");
+        var wrong = await Http.SendAsync(wrongRequest);
+        wrong.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Operator_can_inspect_rotate_disable_enable_and_replace_client_permissions()
+    {
+        var registrationResponse = await RegisterAsync(NewRegistration("managed-client"));
+        var original = await registrationResponse.Content.ReadFromJsonAsync<RegisterClientResponse>(JsonOptions);
+        original.Should().NotBeNull();
+
+        using var listRequest = OperatorRequest(HttpMethod.Get, "/v1/admin/clients?offset=0&limit=20");
+        var listResponse = await Http.SendAsync(listRequest);
+        listResponse.EnsureSuccessStatusCode();
+        var clients = await listResponse.Content.ReadFromJsonAsync<Page<ClientSummaryResult>>(JsonOptions);
+        clients!.Items.Should().ContainSingle(x => x.Id == original!.ClientId && x.PermissionCount == 1 && x.IsEnabled);
+        (await listResponse.Content.ReadAsStringAsync()).ToLowerInvariant().Should().NotContain("tokenhash");
+
+        using var detailRequest = OperatorRequest(HttpMethod.Get, $"/v1/admin/clients/{original!.ClientId}");
+        var detailResponse = await Http.SendAsync(detailRequest);
+        detailResponse.EnsureSuccessStatusCode();
+        var detail = await detailResponse.Content.ReadFromJsonAsync<ClientDetailResult>(JsonOptions);
+        detail!.Permissions.Should().ContainSingle(x => x.Category == "preferences" && x.CanRead);
+        (await detailResponse.Content.ReadAsStringAsync()).ToLowerInvariant().Should().NotContain("tokenhash");
+
+        using var rotateRequest = OperatorRequest(HttpMethod.Post, $"/v1/admin/clients/{original.ClientId}/rotate-token");
+        var rotateResponse = await Http.SendAsync(rotateRequest);
+        rotateResponse.EnsureSuccessStatusCode();
+        var rotated = await rotateResponse.Content.ReadFromJsonAsync<RotateClientTokenResponse>(JsonOptions);
+        rotated!.Token.Should().NotBe(original.Token);
+
+        Authenticate(original);
+        (await Http.PostAsJsonAsync("/v1/memories/search", new SearchRequest("anything"))).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        Authenticate(new RegisterClientResponse(rotated.ClientId, rotated.Token));
+        (await Http.PostAsJsonAsync("/v1/memories/search", new SearchRequest("anything", "preferences"))).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var disableRequest = OperatorRequest(HttpMethod.Put, $"/v1/admin/clients/{original.ClientId}/status", new ClientStatusRequest(false));
+        (await Http.SendAsync(disableRequest)).EnsureSuccessStatusCode();
+        (await Http.PostAsJsonAsync("/v1/memories/search", new SearchRequest("anything", "preferences"))).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        using var enableRequest = OperatorRequest(HttpMethod.Put, $"/v1/admin/clients/{original.ClientId}/status", new ClientStatusRequest(true));
+        (await Http.SendAsync(enableRequest)).EnsureSuccessStatusCode();
+        (await Http.PostAsJsonAsync("/v1/memories/search", new SearchRequest("anything", "preferences"))).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var replacement = new ReplaceClientPermissionsRequest([new PermissionRequest("projects", true, true, false, false, Sensitivity.Normal)]);
+        using var permissionsRequest = OperatorRequest(HttpMethod.Put, $"/v1/admin/clients/{original.ClientId}/permissions", replacement);
+        var permissionsResponse = await Http.SendAsync(permissionsRequest);
+        permissionsResponse.EnsureSuccessStatusCode();
+        var updated = await permissionsResponse.Content.ReadFromJsonAsync<ClientDetailResult>(JsonOptions);
+        updated!.Permissions.Should().ContainSingle(x => x.Category == "projects" && x.CanRead && !x.CanUpdate);
+        (await Http.PostAsJsonAsync("/v1/memories", new RememberRequest("must be denied", null, "preferences"))).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await Http.PostAsJsonAsync("/v1/memories/search", new SearchRequest("anything", "projects"))).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Invalid_permission_replacement_is_rejected_without_changing_existing_permissions()
+    {
+        var registration = await RegisterAsync(NewRegistration("permission-validation-client"));
+        var credentials = await registration.Content.ReadFromJsonAsync<RegisterClientResponse>(JsonOptions);
+        var invalid = new ReplaceClientPermissionsRequest([
+            new PermissionRequest("preferences", true, false, false, false, Sensitivity.Normal),
+            new PermissionRequest(" Preferences ", false, false, false, false, Sensitivity.Normal)
+        ]);
+
+        using var replaceRequest = OperatorRequest(HttpMethod.Put, $"/v1/admin/clients/{credentials!.ClientId}/permissions", invalid);
+        (await Http.SendAsync(replaceRequest)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        using var detailRequest = OperatorRequest(HttpMethod.Get, $"/v1/admin/clients/{credentials.ClientId}");
+        var detailResponse = await Http.SendAsync(detailRequest);
+        var detail = await detailResponse.Content.ReadFromJsonAsync<ClientDetailResult>(JsonOptions);
+        detail!.Permissions.Should().ContainSingle(x => x.Category == "preferences" && x.CanCreate && x.CanUpdate && x.CanDelete);
+    }
+
+    [Fact]
     public async Task Database_is_encrypted_restarts_and_rejects_unkeyed_reads()
     {
         var marker = "encryption-marker-that-must-not-appear-in-file";
@@ -254,8 +335,16 @@ public sealed class ApiWorkflowTests : IAsyncLifetime
         message.Headers.Add("X-Recall-Bootstrap-Token", BootstrapToken);
         return await Http.SendAsync(message);
     }
+    private static HttpRequestMessage OperatorRequest(HttpMethod method, string path, object? body = null)
+    {
+        var message = new HttpRequestMessage(method, path);
+        message.Headers.Add("X-Recall-Bootstrap-Token", BootstrapToken);
+        if (body is not null) message.Content = JsonContent.Create(body);
+        return message;
+    }
     private void Authenticate(RegisterClientResponse credentials)
     {
+        Http.DefaultRequestHeaders.Remove("X-Recall-Client-Id");
         Http.DefaultRequestHeaders.Add("X-Recall-Client-Id", credentials.ClientId.ToString());
         Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", credentials.Token);
     }

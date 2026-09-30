@@ -61,6 +61,18 @@ $client
 
 Attempting to register an existing `PublicIdentifier` returns HTTP `409 Conflict` with `public_identifier_exists` rather than issuing another token.
 
+### Manage client access
+
+Client administration uses the same operator-only `X-Recall-Bootstrap-Token` header. These endpoints never return a stored token digest:
+
+- `GET /v1/admin/clients?offset=0&limit=20` lists clients.
+- `GET /v1/admin/clients/{clientId}` shows one client and its permissions.
+- `PUT /v1/admin/clients/{clientId}/status` with `{ "isEnabled": false }` immediately disables its bearer token; send `true` to re-enable it.
+- `POST /v1/admin/clients/{clientId}/rotate-token` immediately invalidates the old token and returns the replacement once.
+- `PUT /v1/admin/clients/{clientId}/permissions` atomically replaces the complete permission set. Supply 1–100 unique categories.
+
+Treat rotation responses like registration responses: copy the new token directly into the intended client's protected configuration and do not place it in source control, shell history, tickets, or logs. If the bootstrap token itself may be compromised, stop the API, set a new `RECALL_BOOTSTRAP_TOKEN`, and restart it; existing client bearer tokens are independent and remain valid until separately rotated or disabled.
+
 ## Test with Swagger
 
 1. Open `http://127.0.0.1:5278/swagger`.
@@ -142,7 +154,7 @@ List, permission, and access-history results use `offset`, a maximum `limit` of 
 dotnet test RecallVault.slnx
 ```
 
-The test suite verifies encrypted creation and restart, protected-key creation and reuse, missing/malformed/wrong-key failures, corrupted-database refusal, credential-store write failures, backup-first plaintext migration, portable password-encrypted backup/restore, wrong-password and corruption refusal, pre-restore rollback packages, interrupted-candidate recovery, mismatched-backup refusal, byte-for-byte vault immutability after failed startup, a non-plaintext database header, absence of memory markers and database keys from data-directory files, rejection of unkeyed reads, FTS5 behavior, authorization, and the authenticated HTTP/MCP workflows.
+The test suite verifies encrypted creation and restart, protected-key creation and reuse, missing/malformed/wrong-key failures, corrupted-database refusal, credential-store write failures, backup-first plaintext migration, portable password-encrypted backup/restore, wrong-password and corruption refusal, pre-restore rollback packages, interrupted-candidate recovery, mismatched-backup refusal, byte-for-byte vault immutability after failed startup, a non-plaintext database header, absence of memory markers and database keys from data-directory files, rejection of unkeyed reads, FTS5 behavior, authorization, immediate client token rotation/revocation and permission replacement, and the authenticated HTTP/MCP workflows.
 
 ## Create and restore a recovery backup
 
@@ -178,8 +190,7 @@ The first encryption-at-rest runtime is Windows-only. It uses reproducible build
 - Portable password-encrypted backup/restore is available in preview; durable crash recovery, scheduled backups, recovery drills, password change, and database-key rotation remain pending.
 - The encrypted API runtime currently supports Windows x64 only; the Linux container preview cannot host it.
 - No desktop UI, installer, browser extension, or cloud synchronization.
-- Client administration, token rotation, and revocation tools are not implemented.
-- Registration is an operator API guarded by a bootstrap secret; token rotation/revocation endpoints and rate limiting are pending.
+- Client registration and administration are operator APIs guarded by a bootstrap secret. Automated bootstrap-secret rollover, rate limiting, and an administration UI are pending.
 - Audit rows are application-immutable, not cryptographically tamper-evident.
 - Permanent purge, vacuum, scheduled backup policy, and automated recovery orchestration are pending.
 

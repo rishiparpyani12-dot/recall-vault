@@ -20,6 +20,8 @@ builder.Services.AddSingleton<IRecallCredentialStore, WindowsCredentialStore>();
 builder.Services.AddSingleton<IRecallDatabaseKeyProvider>(provider => new RecallDatabaseKeyProvider(databasePath, provider.GetRequiredService<IRecallCredentialStore>()));
 builder.Services.AddRecallInfrastructure(databasePath);
 builder.Services.AddScoped<ClientAuthenticator>();
+builder.Services.AddScoped<OperatorAuthenticator>();
+builder.Services.AddScoped<ClientAdministration>();
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -49,7 +51,7 @@ builder.Services.AddSwaggerGen(options =>
         Type = SecuritySchemeType.ApiKey,
         In = ParameterLocation.Header,
         Name = "X-Recall-Bootstrap-Token",
-        Description = "Operator bootstrap token used only to register clients"
+        Description = "Operator token used to register and administer clients"
     });
     options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
     {
@@ -72,19 +74,18 @@ app.UseSwaggerUI(options =>
 });
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-app.MapPost("/v1/clients", async (RegisterClientRequest request, HttpContext http, RecallDbContext db, IConfiguration config, CancellationToken ct) =>
+app.MapPost("/v1/clients", async (RegisterClientRequest request, HttpContext http, RecallDbContext db, OperatorAuthenticator auth, CancellationToken ct) =>
 {
-    var expected = config["Recall:BootstrapToken"] ?? Environment.GetEnvironmentVariable("RECALL_BOOTSTRAP_TOKEN");
-    var supplied = http.Request.Headers["X-Recall-Bootstrap-Token"].ToString();
-    if (string.IsNullOrWhiteSpace(expected) || !TokenTools.Equals(expected, supplied)) return Results.Unauthorized();
-    if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.ClientType) || string.IsNullOrWhiteSpace(request.PublicIdentifier) || request.Permissions.Count is 0 or > 100) return Results.BadRequest();
+    auth.Authenticate(http);
+    if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.ClientType) || string.IsNullOrWhiteSpace(request.PublicIdentifier)) return Results.BadRequest();
+    var permissions = ClientAdministration.ValidatePermissions(request.Permissions);
     var publicIdentifier = request.PublicIdentifier.Trim();
     if (await db.Clients.AnyAsync(x => x.PublicIdentifier == publicIdentifier, ct))
         return Results.Conflict(new { error = "public_identifier_exists" });
     var token = TokenTools.Create();
     var client = new Client { Name = request.Name.Trim(), ClientType = request.ClientType.Trim(), PublicIdentifier = publicIdentifier, TokenHash = TokenTools.Hash(token), CreatedAt = DateTimeOffset.UtcNow };
     db.Clients.Add(client);
-    foreach (var p in request.Permissions) db.Permissions.Add(new Permission { ClientId = client.Id, Category = p.Category.Trim(), CanRead = p.CanRead, CanCreate = p.CanCreate, CanUpdate = p.CanUpdate, CanDelete = p.CanDelete, MaximumSensitivity = p.MaximumSensitivity });
+    foreach (var p in permissions) db.Permissions.Add(new Permission { ClientId = client.Id, Category = p.Category, CanRead = p.CanRead, CanCreate = p.CanCreate, CanUpdate = p.CanUpdate, CanDelete = p.CanDelete, MaximumSensitivity = p.MaximumSensitivity });
     try
     {
         await db.SaveChangesAsync(ct);
@@ -94,6 +95,33 @@ app.MapPost("/v1/clients", async (RegisterClientRequest request, HttpContext htt
         return Results.Conflict(new { error = "client_registration_conflict" });
     }
     return Results.Created($"/v1/clients/{client.Id}", new RegisterClientResponse(client.Id, token));
+});
+
+var clients = app.MapGroup("/v1/admin/clients");
+clients.MapGet("/", async (int offset, int limit, HttpContext http, OperatorAuthenticator auth, ClientAdministration administration, CancellationToken ct) =>
+{
+    auth.Authenticate(http);
+    return Results.Ok(await administration.ListAsync(offset, limit == 0 ? 20 : limit, ct));
+});
+clients.MapGet("/{id:guid}", async (Guid id, HttpContext http, OperatorAuthenticator auth, ClientAdministration administration, CancellationToken ct) =>
+{
+    auth.Authenticate(http);
+    return Results.Ok(await administration.GetAsync(id, ct));
+});
+clients.MapPut("/{id:guid}/status", async (Guid id, ClientStatusRequest request, HttpContext http, OperatorAuthenticator auth, ClientAdministration administration, CancellationToken ct) =>
+{
+    auth.Authenticate(http);
+    return Results.Ok(await administration.SetStatusAsync(id, request.IsEnabled, ct));
+});
+clients.MapPost("/{id:guid}/rotate-token", async (Guid id, HttpContext http, OperatorAuthenticator auth, ClientAdministration administration, CancellationToken ct) =>
+{
+    auth.Authenticate(http);
+    return Results.Ok(await administration.RotateTokenAsync(id, ct));
+});
+clients.MapPut("/{id:guid}/permissions", async (Guid id, ReplaceClientPermissionsRequest request, HttpContext http, OperatorAuthenticator auth, ClientAdministration administration, CancellationToken ct) =>
+{
+    auth.Authenticate(http);
+    return Results.Ok(await administration.ReplacePermissionsAsync(id, request.Permissions, ct));
 });
 
 var memories = app.MapGroup("/v1/memories");

@@ -75,19 +75,19 @@ To roll back while the plaintext backup is retained, stop all Recall processes, 
 
 ## Incident response
 
-1. Contain: stop Recall services and revoke network or tunnel exposure. If a client token may be compromised, stop the API because token revocation is not implemented yet.
+1. Contain: revoke network or tunnel exposure. If a client token may be compromised, disable that client with `PUT /v1/admin/clients/{clientId}/status` or rotate it with `POST /v1/admin/clients/{clientId}/rotate-token`; stop the API first if the bootstrap token or host may also be compromised.
 2. Preserve: make read-only copies of the data directory and relevant logs. Record times, release or commit, OS account, observed errors, and affected client IDs without copying secret values into tickets.
 3. Classify: determine whether the incident involves a client or bootstrap token, database key, plaintext migration backup, encrypted database, host account, or native dependency.
 4. Recover: restore from a verified portable recovery package using its separately stored password. If no recovery package, matching Windows credential, or retained plaintext migration backup exists, the encrypted vault is unrecoverable.
 5. Validate: verify health, representative reads and searches, permissions, and access history before reopening client access.
-6. Learn: document scope and timeline, rotate externally managed bootstrap or client credentials where possible, preserve evidence, and open remediation work. Do not publish memory content, keys, tokens, databases, or raw sensitive logs.
+6. Learn: document scope and timeline, rotate the affected client token, replace permissions if scope was excessive, and rotate the externally supplied bootstrap token by restarting the API with a new value. Preserve evidence and open remediation work. Do not publish memory content, keys, tokens, databases, or raw sensitive logs.
 
 ## Release gates
 
 The implemented Windows runtime has SQLCipher integration, OS-protected key creation and reuse, backup-first plaintext migration, fail-closed behavior, and automated encryption tests. It is still a preview for synthetic or replaceable data until all of the following are demonstrated:
 
 - durable crash-point recovery journaling and clean-machine restore drills for the encrypted database/key package;
-- client and bootstrap token rotation and revocation;
+- protected bootstrap-secret storage and automated rollover;
 - operational monitoring and restore drills;
 - security review of packaging, installer and update behavior, and hosted OAuth/TLS deployment where applicable.
 
